@@ -6,7 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/database.service';
 import { CreateInvoiceDto, UpdateInvoiceDto } from '../dto/invoice.dto';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../../../generated/prisma-client/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
 
 const INVOICE_SELECT = {
   id: true,
@@ -52,11 +53,11 @@ export class InvoiceService {
         },
         select: INVOICE_SELECT,
       });
-    } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
+    } catch (e: unknown) {
+  if (
+    e instanceof PrismaClientKnownRequestError &&
+    e.code === 'P2002'
+  ) {
         throw new ConflictException(
           `Invoice for estimate ${dto.estimateId} already exists`,
         );

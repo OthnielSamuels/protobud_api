@@ -17,11 +17,11 @@ services:
   # -----------------------------------------------------------
   postgres:
     image: postgres:16-alpine
-    container_name: printbot-postgres
+    container_name: protobot-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB:       ${POSTGRES_DB:-printbot}
-      POSTGRES_USER:     ${POSTGRES_USER:-printbot}
+      POSTGRES_DB:       ${POSTGRES_DB:-protobot}
+      POSTGRES_USER:     ${POSTGRES_USER:-protobot}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -36,28 +36,28 @@ services:
         reservations:
           memory: 128MB
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-printbot} -d ${POSTGRES_DB:-printbot}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-protobot} -d ${POSTGRES_DB:-protobot}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
     networks:
-      - printbot-net
+      - protobot-net
 
   # -----------------------------------------------------------
   # NestJS Backend
   # -----------------------------------------------------------
   nestjs-backend:
     build:
-      context: ./backend
+      context: ./
       dockerfile: Dockerfile
-    container_name: printbot-backend
+    container_name: protobot-backend
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-printbot}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-printbot}?connection_limit=5&pool_timeout=10
+      DATABASE_URL: postgresql://${POSTGRES_USER:-protobot}:${POSTGRES_PASSWORD:-protobot}@postgres:5432/${POSTGRES_DB:-protobot}?connection_limit=5&pool_timeout=10
       OLLAMA_HOST:  http://ollama:11434
-      NODE_ENV:     production
+      NODE_ENV:     development
     ports:
       - "127.0.0.1:3000:3000"   # localhost only
     depends_on:
@@ -78,7 +78,7 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - printbot-net
+      - protobot-net
 
   # -----------------------------------------------------------
   # WhatsApp Bot — separate container, isolated Puppeteer
@@ -87,7 +87,7 @@ services:
     build:
       context: ./whatsapp-bot
       dockerfile: Dockerfile
-    container_name: printbot-whatsapp
+    container_name: protobot-whatsapp
     restart: unless-stopped
     environment:
       BACKEND_URL:         http://nestjs-backend:3000
@@ -111,14 +111,14 @@ services:
     # Shared memory bump — Chromium needs more than Docker's default 64MB
     shm_size: '256mb'
     networks:
-      - printbot-net
+      - protobot-net
 
   # -----------------------------------------------------------
   # Ollama — LLM inference, GPU passthrough
   # -----------------------------------------------------------
   ollama:
     image: ollama/ollama:latest
-    container_name: printbot-ollama
+    container_name: protobot-ollama
     restart: unless-stopped
     volumes:
       - ollama_models:/root/.ollama           # Model persistence
@@ -147,7 +147,7 @@ services:
       retries: 5
       start_period: 60s   # Model pull can take time on first boot
     networks:
-      - printbot-net
+      - protobot-net
 
 # =============================================================
 # Volumes — all named, all persistent
@@ -166,5 +166,5 @@ volumes:
 # Network — single isolated bridge network
 # =============================================================
 networks:
-  printbot-net:
+  protobot-net:
     driver: bridge

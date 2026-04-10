@@ -4,7 +4,7 @@ import { PipelineService } from './pipeline.service';
 import { EstimateModule } from '../estimate/estimate.module';
 import { InvoiceModule } from '../invoice/invoice.module';
 import { ChatModule } from '../chat/chat.module';
-import { WhatsappModule } from '../whatsapp/whatsapp.module';
+import { WhatsappModule } from '../whatsapp-bot/whatsapp.module';
 
 @Module({
   imports: [

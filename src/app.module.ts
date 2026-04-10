@@ -6,7 +6,7 @@ import { ProjectModule } from './api/project/project.module';
 import { EstimateModule } from './api/estimate/estimate.module';
 import { InvoiceModule } from './api/invoice/invoice.module';
 import { LlmModule } from './api/llm/llm.module';
-import { WhatsappModule } from './api/whatsapp/whatsapp.module';
+import { WhatsappModule } from './api/whatsapp-bot/whatsapp.module';
 import { PipelineModule } from './api/pipeline/pipeline.module';
 import { HealthModule } from './api/health/health.module';
 

@@ -45,8 +45,11 @@ RUN npm install --omit=dev --frozen-lockfile && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 
 # Copy Prisma schema + generated client
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+# COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+# COPY prisma/ ./prisma/
+
+COPY --from=builder /app/generated ./generated
 COPY prisma/ ./prisma/
 
 # Run as non-root

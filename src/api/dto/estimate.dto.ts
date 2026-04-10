@@ -13,7 +13,7 @@ import {
   Length,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { EstimateStatus } from '@prisma/client';
+import { EstimateStatus } from '../../../generated/prisma-client/client';
 
 export class CreateEstimateItemDto {
   @IsString()

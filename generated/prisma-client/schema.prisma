@@ -1,0 +1,231 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma-client"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================
+// ENUMS
+// =============================================================
+
+enum ConversationStatus {
+  collecting_data
+  awaiting_internal_input
+  completed
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+}
+
+enum ProjectStatus {
+  draft
+  active
+  completed
+  cancelled
+}
+
+enum EstimateStatus {
+  draft
+  awaiting_internal_input
+  approved
+  rejected
+}
+
+enum InvoiceStatus {
+  draft
+  sent
+  paid
+  cancelled
+}
+
+enum PrintMaterial {
+  PLA
+  PETG
+  ABS
+  TPU
+  RESIN
+  NYLON
+  OTHER
+}
+
+enum PrintQuality {
+  draft
+  standard
+  high
+  ultra
+}
+
+// =============================================================
+// CLIENT
+// =============================================================
+
+model Client {
+  id      String  @id @default(uuid())
+  name    String
+  phone   String  @unique // WhatsApp phone number
+  email   String?
+  company String?
+  notes   String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  conversations Conversation[]
+  projects      Project[]
+  invoices      Invoice[]
+
+  @@map("clients")
+}
+
+// =============================================================
+// CONVERSATION
+// =============================================================
+
+model Conversation {
+  id     String             @id @default(uuid())
+  phone  String             @unique // 1 active convo per phone
+  status ConversationStatus @default(collecting_data)
+
+  clientId String? @map("client_id")
+  client   Client? @relation(fields: [clientId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  messages Message[]
+
+  @@index([phone])
+  @@index([status])
+  @@map("conversations")
+}
+
+// =============================================================
+// MESSAGE
+// =============================================================
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  role    MessageRole
+  content String      @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // No updatedAt — messages are immutable once stored
+
+  @@index([conversationId, createdAt]) // efficient last-N fetch
+  @@map("messages")
+}
+
+// =============================================================
+// PROJECT
+// =============================================================
+
+model Project {
+  id       String @id @default(uuid())
+  clientId String @map("client_id")
+  client   Client @relation(fields: [clientId], references: [id])
+
+  name        String
+  description String?       @db.Text
+  status      ProjectStatus @default(draft)
+
+  // 3D printing specifics (nullable — can be filled later)
+  material    PrintMaterial?
+  quality     PrintQuality?
+  fileUrl     String?        @map("file_url") // STL/OBJ file reference
+  weightGrams Decimal?       @map("weight_grams") @db.Decimal(8, 2)
+  printHours  Decimal?       @map("print_hours") @db.Decimal(6, 2)
+  notes       String?        @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  estimates Estimate[]
+
+  @@index([clientId])
+  @@map("projects")
+}
+
+// =============================================================
+// ESTIMATE
+// =============================================================
+
+model Estimate {
+  id        String  @id @default(uuid())
+  projectId String  @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id])
+
+  status EstimateStatus @default(draft)
+  notes  String?        @db.Text
+
+  // Totals — computed and stored by internal operator, NOT by LLM
+  subtotal Decimal? @db.Decimal(10, 2)
+  tax      Decimal? @db.Decimal(10, 2)
+  total    Decimal? @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items   EstimateItem[]
+  invoice Invoice?
+
+  @@index([projectId])
+  @@index([status])
+  @@map("estimates")
+}
+
+// =============================================================
+// ESTIMATE ITEM
+// =============================================================
+
+model EstimateItem {
+  id         String   @id @default(uuid())
+  estimateId String   @map("estimate_id")
+  estimate   Estimate @relation(fields: [estimateId], references: [id])
+
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Decimal? @map("unit_price") @db.Decimal(10, 2) // nullable: set by operator
+  totalPrice  Decimal? @map("total_price") @db.Decimal(10, 2) // nullable: set by operator
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([estimateId])
+  @@map("estimate_items")
+}
+
+// =============================================================
+// INVOICE
+// =============================================================
+
+model Invoice {
+  id         String   @id @default(uuid())
+  estimateId String   @unique @map("estimate_id") // 1-to-1 with Estimate
+  estimate   Estimate @relation(fields: [estimateId], references: [id])
+
+  clientId String @map("client_id")
+  client   Client @relation(fields: [clientId], references: [id])
+
+  status        InvoiceStatus @default(draft)
+  invoiceNumber String?       @unique @map("invoice_number") // assigned by operator
+  dueDate       DateTime?     @map("due_date")
+  paidAt        DateTime?     @map("paid_at")
+  notes         String?       @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([clientId])
+  @@index([status])
+  @@map("invoices")
+}

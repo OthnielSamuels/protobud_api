@@ -8,8 +8,8 @@ import { PrismaService } from '../../prisma/database.service';
 import { EstimateService } from '../estimate/estimate.service';
 import { InvoiceService } from '../invoice/invoice.service';
 import { ChatService } from '../chat/chat.service';
-import { WhatsappService } from '../whatsapp/whatsapp.service';
-import { ConversationStatus, EstimateStatus, InvoiceStatus } from '@prisma/client';
+import { WhatsappService } from '../whatsapp-bot/whatsapp.service';
+import { ConversationStatus, EstimateStatus, InvoiceStatus } from '../../../generated/prisma-client/client';
 
 export interface FinalizeEstimateDto {
   estimateId: string;
