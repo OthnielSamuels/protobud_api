@@ -1,0 +1,170 @@
+version: '3.9'
+
+# =============================================================
+# 3D Printing Chatbot — Docker Compose
+# Total RAM budget: ~8GB across all containers
+#
+# nestjs-backend:  512MB–800MB
+# postgres:        ≤ 500MB
+# whatsapp-bot:    ≤ 500MB
+# ollama:          4–5GB (model loaded in VRAM, host RAM for overhead)
+# =============================================================
+
+services:
+
+  # -----------------------------------------------------------
+  # PostgreSQL — tuned for low memory via custom config
+  # -----------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: printbot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-printbot}
+      POSTGRES_USER:     ${POSTGRES_USER:-printbot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    ports:
+      - "127.0.0.1:5432:5432"   # localhost only — never expose to internet
+    deploy:
+      resources:
+        limits:
+          memory: 512MB
+        reservations:
+          memory: 128MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-printbot} -d ${POSTGRES_DB:-printbot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - printbot-net
+
+  # -----------------------------------------------------------
+  # NestJS Backend
+  # -----------------------------------------------------------
+  nestjs-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: printbot-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-printbot}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-printbot}?connection_limit=5&pool_timeout=10
+      OLLAMA_HOST:  http://ollama:11434
+      NODE_ENV:     production
+    ports:
+      - "127.0.0.1:3000:3000"   # localhost only
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 800MB
+        reservations:
+          memory: 256MB
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - printbot-net
+
+  # -----------------------------------------------------------
+  # WhatsApp Bot — separate container, isolated Puppeteer
+  # -----------------------------------------------------------
+  whatsapp-bot:
+    build:
+      context: ./whatsapp-bot
+      dockerfile: Dockerfile
+    container_name: printbot-whatsapp
+    restart: unless-stopped
+    environment:
+      BACKEND_URL:         http://nestjs-backend:3000
+      BOT_HTTP_PORT:       3001
+      REQUEST_TIMEOUT_MS:  90000
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+    volumes:
+      - whatsapp_auth:/app/.wwebjs_auth      # Session persistence — scan QR once
+      - whatsapp_cache:/app/.wwebjs_cache    # WhatsApp Web version cache
+    ports:
+      - "127.0.0.1:3001:3001"   # Internal only — NestJS calls this
+    depends_on:
+      nestjs-backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512MB
+        reservations:
+          memory: 200MB
+    # Shared memory bump — Chromium needs more than Docker's default 64MB
+    shm_size: '256mb'
+    networks:
+      - printbot-net
+
+  # -----------------------------------------------------------
+  # Ollama — LLM inference, GPU passthrough
+  # -----------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: printbot-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama           # Model persistence
+      - ./ollama/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    ports:
+      - "127.0.0.1:11434:11434"  # localhost only
+    environment:
+      OLLAMA_NUM_PARALLEL: 1        # Only 1 inference at a time — enforced at model level
+      OLLAMA_MAX_LOADED_MODELS: 1   # Never load more than 1 model
+      OLLAMA_KEEP_ALIVE: 24h        # Keep model loaded — avoid cold-start delay
+    deploy:
+      resources:
+        limits:
+          memory: 5GB
+        reservations:
+          memory: 2GB
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 60s   # Model pull can take time on first boot
+    networks:
+      - printbot-net
+
+# =============================================================
+# Volumes — all named, all persistent
+# =============================================================
+volumes:
+  postgres_data:
+    driver: local
+  ollama_models:
+    driver: local
+  whatsapp_auth:
+    driver: local
+  whatsapp_cache:
+    driver: local
+
+# =============================================================
+# Network — single isolated bridge network
+# =============================================================
+networks:
+  printbot-net:
+    driver: bridge
