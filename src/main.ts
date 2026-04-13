@@ -7,17 +7,18 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, {
     // Disable heavy logger in production — saves memory & I/O
-    logger: process.env.NODE_ENV === 'development'
-      ? ['log', 'warn', 'error']
-      : ['warn', 'error'],
+    logger:
+      process.env.NODE_ENV === 'development'
+        ? ['log', 'warn', 'error']
+        : ['warn', 'error'],
   });
 
   // Global validation pipe — strip unknown fields, auto-transform types
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,          // Strip fields not in DTO
+      whitelist: true, // Strip fields not in DTO
       forbidNonWhitelisted: false,
-      transform: true,          // Auto-cast primitives (string → number etc.)
+      transform: true, // Auto-cast primitives (string → number etc.)
       transformOptions: {
         enableImplicitConversion: true,
       },

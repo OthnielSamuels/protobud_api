@@ -223,9 +223,7 @@ let PipelineService = PipelineService_1 = class PipelineService {
                 where: { id: estimateId },
                 data: {
                     status: client_1.EstimateStatus.rejected,
-                    notes: reason
-                        ? `Rejected: ${reason}`
-                        : 'Rejected by operator',
+                    notes: reason ? `Rejected: ${reason}` : 'Rejected by operator',
                 },
             });
             const conversation = estimate.project.client.conversations[0];

@@ -3,7 +3,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseLlmResponse = parseLlmResponse;
 const common_1 = require("@nestjs/common");
 const logger = new common_1.Logger('LlmParser');
-const VALID_MATERIALS = ['PLA', 'PETG', 'ABS', 'TPU', 'RESIN', 'NYLON', 'OTHER'];
+const VALID_MATERIALS = [
+    'PLA',
+    'PETG',
+    'ABS',
+    'TPU',
+    'RESIN',
+    'NYLON',
+    'OTHER',
+];
 const VALID_QUALITIES = ['draft', 'standard', 'high', 'ultra'];
 function extractJsonCandidate(raw) {
     const trimmed = raw.trim();

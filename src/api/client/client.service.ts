@@ -32,10 +32,7 @@ export class ClientService {
         select: CLIENT_SELECT,
       });
     } catch (e: unknown) {
-      if (
-        e instanceof PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
+      if (e instanceof PrismaClientKnownRequestError && e.code === 'P2002') {
         throw new ConflictException(
           `Client with phone ${dto.phone} already exists`,
         );

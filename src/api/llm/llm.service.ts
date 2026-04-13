@@ -1,5 +1,10 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import { LlmRequest, LlmResponse, OllamaRequestBody, OllamaResponse } from './llm.types';
+import {
+  LlmRequest,
+  LlmResponse,
+  OllamaRequestBody,
+  OllamaResponse,
+} from './llm.types';
 import { buildPrompt } from './prompt.builder';
 import { parseLlmResponse } from './llm.parser';
 
@@ -97,9 +102,9 @@ export class LlmService implements OnModuleDestroy {
       messages: prompt,
       stream: false,
       options: {
-        temperature: 0.3,    // Low temp — we want consistent, structured output
-        num_predict: 512,    // Max output tokens — keep short to save VRAM/time
-        num_ctx: 2048,       // Context window — sufficient for 5 messages + system prompt
+        temperature: 0.3, // Low temp — we want consistent, structured output
+        num_predict: 512, // Max output tokens — keep short to save VRAM/time
+        num_ctx: 2048, // Context window — sufficient for 5 messages + system prompt
       },
     };
 

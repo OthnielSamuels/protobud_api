@@ -4,31 +4,31 @@ export declare class PipelineController {
     private readonly pipelineService;
     constructor(pipelineService: PipelineService);
     getPending(): Promise<{
+        id: string;
+        phone: string;
+        status: import("../../../generated/prisma-client").$Enums.ConversationStatus;
+        updatedAt: Date;
         client: {
-            phone: string;
             id: string;
+            phone: string;
             name: string;
             company: string | null;
         } | null;
-        phone: string;
-        id: string;
-        status: import("../../../generated/prisma-client").$Enums.ConversationStatus;
-        updatedAt: Date;
     }[]>;
     getDetail(id: string): Promise<{
         conversation: {
+            id: string;
+            phone: string;
+            status: import("../../../generated/prisma-client").$Enums.ConversationStatus;
+            createdAt: Date;
+            updatedAt: Date;
             client: {
-                phone: string;
                 id: string;
+                phone: string;
                 name: string;
                 email: string | null;
                 company: string | null;
             } | null;
-            phone: string;
-            id: string;
-            status: import("../../../generated/prisma-client").$Enums.ConversationStatus;
-            createdAt: Date;
-            updatedAt: Date;
             messages: {
                 createdAt: Date;
                 role: import("../../../generated/prisma-client").$Enums.MessageRole;
@@ -38,15 +38,15 @@ export declare class PipelineController {
         projects: any;
     }>;
     finalize(dto: FinalizeEstimateRequestDto): Promise<{
-        invoice: {
-            id: string;
-            status: import("../../../generated/prisma-client").$Enums.InvoiceStatus;
-        } | null;
         id: string;
         status: import("../../../generated/prisma-client").$Enums.EstimateStatus;
         subtotal: any;
         tax: any;
         total: any;
+        invoice: {
+            id: string;
+            status: import("../../../generated/prisma-client").$Enums.InvoiceStatus;
+        } | null;
     } | null>;
     notify(dto: NotifyClientRequestDto): Promise<{
         completed: boolean;

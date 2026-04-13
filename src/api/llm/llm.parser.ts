@@ -9,7 +9,15 @@ import {
 const logger = new Logger('LlmParser');
 
 // Valid enum values mirroring Prisma schema
-const VALID_MATERIALS = ['PLA', 'PETG', 'ABS', 'TPU', 'RESIN', 'NYLON', 'OTHER'];
+const VALID_MATERIALS = [
+  'PLA',
+  'PETG',
+  'ABS',
+  'TPU',
+  'RESIN',
+  'NYLON',
+  'OTHER',
+];
 const VALID_QUALITIES = ['draft', 'standard', 'high', 'ultra'];
 
 /**
@@ -28,7 +36,9 @@ function extractJsonCandidate(raw: string): string | null {
   if (fenceMatch) return fenceMatch[1];
 
   // JSON embedded somewhere in text (last resort)
-  const embeddedMatch = trimmed.match(/(\{[\s\S]*"type"\s*:\s*"invoice_intent"[\s\S]*\})/);
+  const embeddedMatch = trimmed.match(
+    /(\{[\s\S]*"type"\s*:\s*"invoice_intent"[\s\S]*\})/,
+  );
   if (embeddedMatch) return embeddedMatch[1];
 
   return null;
@@ -39,20 +49,25 @@ function extractJsonCandidate(raw: string): string | null {
  * Returns error string if invalid, null if valid.
  */
 function validateInvoicePayload(payload: unknown): string | null {
-  if (!payload || typeof payload !== 'object') return 'payload is not an object';
+  if (!payload || typeof payload !== 'object')
+    return 'payload is not an object';
 
   const p = payload as Record<string, unknown>;
 
   // client validation
   if (!p.client || typeof p.client !== 'object') return 'missing client object';
   const client = p.client as Record<string, unknown>;
-  if (typeof client.name !== 'string' || !client.name.trim()) return 'client.name is required';
-  if (typeof client.phone !== 'string' || !client.phone.trim()) return 'client.phone is required';
+  if (typeof client.name !== 'string' || !client.name.trim())
+    return 'client.name is required';
+  if (typeof client.phone !== 'string' || !client.phone.trim())
+    return 'client.phone is required';
 
   // project validation
-  if (!p.project || typeof p.project !== 'object') return 'missing project object';
+  if (!p.project || typeof p.project !== 'object')
+    return 'missing project object';
   const project = p.project as Record<string, unknown>;
-  if (typeof project.name !== 'string' || !project.name.trim()) return 'project.name is required';
+  if (typeof project.name !== 'string' || !project.name.trim())
+    return 'project.name is required';
 
   if (project.material !== null && project.material !== undefined) {
     if (!VALID_MATERIALS.includes(project.material as string)) {
@@ -67,7 +82,8 @@ function validateInvoicePayload(payload: unknown): string | null {
   }
 
   // items validation
-  if (!Array.isArray(p.items) || p.items.length === 0) return 'items must be a non-empty array';
+  if (!Array.isArray(p.items) || p.items.length === 0)
+    return 'items must be a non-empty array';
 
   for (let i = 0; i < p.items.length; i++) {
     const item = p.items[i] as Record<string, unknown>;
@@ -107,7 +123,9 @@ export function parseLlmResponse(raw: string): LlmResponse {
         const validationError = validateInvoicePayload(payload);
 
         if (validationError) {
-          logger.warn(`Invalid invoice_intent payload: ${validationError}. Treating as text.`);
+          logger.warn(
+            `Invalid invoice_intent payload: ${validationError}. Treating as text.`,
+          );
           // Fall through to text response — don't crash, let chat continue
           return { type: 'text', content: trimmed } satisfies LlmTextResponse;
         }

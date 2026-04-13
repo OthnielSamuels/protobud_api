@@ -7,12 +7,7 @@ import { ChatModule } from '../chat/chat.module';
 import { WhatsappModule } from '../whatsapp-bot/whatsapp.module';
 
 @Module({
-  imports: [
-    EstimateModule,
-    InvoiceModule,
-    ChatModule,
-    WhatsappModule,
-  ],
+  imports: [EstimateModule, InvoiceModule, ChatModule, WhatsappModule],
   controllers: [PipelineController],
   providers: [PipelineService],
 })

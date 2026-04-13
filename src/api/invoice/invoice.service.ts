@@ -54,10 +54,7 @@ export class InvoiceService {
         select: INVOICE_SELECT,
       });
     } catch (e: unknown) {
-  if (
-    e instanceof PrismaClientKnownRequestError &&
-    e.code === 'P2002'
-  ) {
+      if (e instanceof PrismaClientKnownRequestError && e.code === 'P2002') {
         throw new ConflictException(
           `Invoice for estimate ${dto.estimateId} already exists`,
         );
