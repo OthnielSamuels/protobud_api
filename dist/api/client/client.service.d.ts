@@ -5,8 +5,8 @@ export declare class ClientService {
     private readonly logger;
     constructor(db: PrismaService);
     create(dto: CreateClientDto): Promise<{
-        phone: string;
         id: string;
+        phone: string;
         createdAt: Date;
         name: string;
         email: string | null;
@@ -14,8 +14,8 @@ export declare class ClientService {
         notes: string | null;
     }>;
     findAll(): Promise<{
-        phone: string;
         id: string;
+        phone: string;
         createdAt: Date;
         name: string;
         email: string | null;
@@ -23,8 +23,8 @@ export declare class ClientService {
         notes: string | null;
     }[]>;
     findOne(id: string): Promise<{
-        phone: string;
         id: string;
+        phone: string;
         createdAt: Date;
         name: string;
         email: string | null;
@@ -32,8 +32,8 @@ export declare class ClientService {
         notes: string | null;
     }>;
     findByPhone(phone: string): Promise<{
-        phone: string;
         id: string;
+        phone: string;
         createdAt: Date;
         name: string;
         email: string | null;
@@ -41,8 +41,8 @@ export declare class ClientService {
         notes: string | null;
     } | null>;
     update(id: string, dto: UpdateClientDto): Promise<{
-        phone: string;
         id: string;
+        phone: string;
         createdAt: Date;
         name: string;
         email: string | null;
@@ -53,8 +53,8 @@ export declare class ClientService {
         deleted: boolean;
     }>;
     findOrCreate(dto: CreateClientDto): Promise<{
-        phone: string;
         id: string;
+        phone: string;
         createdAt: Date;
         name: string;
         email: string | null;

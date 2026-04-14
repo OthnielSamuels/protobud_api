@@ -19,12 +19,7 @@ let PipelineModule = class PipelineModule {
 exports.PipelineModule = PipelineModule;
 exports.PipelineModule = PipelineModule = __decorate([
     (0, common_1.Module)({
-        imports: [
-            estimate_module_1.EstimateModule,
-            invoice_module_1.InvoiceModule,
-            chat_module_1.ChatModule,
-            whatsapp_module_1.WhatsappModule,
-        ],
+        imports: [estimate_module_1.EstimateModule, invoice_module_1.InvoiceModule, chat_module_1.ChatModule, whatsapp_module_1.WhatsappModule],
         controllers: [pipeline_controller_1.PipelineController],
         providers: [pipeline_service_1.PipelineService],
     })

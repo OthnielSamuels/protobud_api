@@ -9,7 +9,11 @@ import { EstimateService } from '../estimate/estimate.service';
 import { InvoiceService } from '../invoice/invoice.service';
 import { ChatService } from '../chat/chat.service';
 import { WhatsappService } from '../whatsapp-bot/whatsapp.service';
-import { ConversationStatus, EstimateStatus, InvoiceStatus } from '../../../generated/prisma-client/client';
+import {
+  ConversationStatus,
+  EstimateStatus,
+  InvoiceStatus,
+} from '../../../generated/prisma-client/client';
 
 export interface FinalizeEstimateDto {
   estimateId: string;
@@ -314,15 +318,12 @@ export class PipelineService {
         where: { id: estimateId },
         data: {
           status: EstimateStatus.rejected,
-          notes: reason
-            ? `Rejected: ${reason}`
-            : 'Rejected by operator',
+          notes: reason ? `Rejected: ${reason}` : 'Rejected by operator',
         },
       });
 
       // Complete the linked conversation if found
-      const conversation =
-        estimate.project.client.conversations[0];
+      const conversation = estimate.project.client.conversations[0];
       if (conversation) {
         await tx.conversation.update({
           where: { id: conversation.id },

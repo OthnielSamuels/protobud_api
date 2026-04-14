@@ -36,8 +36,7 @@ let ClientService = ClientService_1 = class ClientService {
             });
         }
         catch (e) {
-            if (e instanceof client_1.PrismaClientKnownRequestError &&
-                e.code === 'P2002') {
+            if (e instanceof client_1.PrismaClientKnownRequestError && e.code === 'P2002') {
                 throw new common_1.ConflictException(`Client with phone ${dto.phone} already exists`);
             }
             throw e;

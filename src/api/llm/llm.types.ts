@@ -64,8 +64,8 @@ export interface OllamaRequestBody {
   stream: false;
   options: {
     temperature: number;
-    num_predict: number;   // max output tokens
-    num_ctx: number;       // context window size
+    num_predict: number; // max output tokens
+    num_ctx: number; // context window size
   };
 }
 

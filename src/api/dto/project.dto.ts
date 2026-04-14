@@ -9,7 +9,11 @@ import {
   Length,
   Min,
 } from 'class-validator';
-import { PrintMaterial, PrintQuality, ProjectStatus } from '../../../generated/prisma-client/client';
+import {
+  PrintMaterial,
+  PrintQuality,
+  ProjectStatus,
+} from '../../../generated/prisma-client/client';
 
 export class CreateProjectDto {
   @IsUUID()

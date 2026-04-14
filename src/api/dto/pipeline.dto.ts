@@ -45,7 +45,7 @@ export class FinalizeEstimateRequestDto {
 
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  tax!  : number;
+  tax!: number;
 
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
@@ -63,7 +63,7 @@ export class NotifyClientRequestDto {
 
   @IsString()
   @Length(1, 4000)
-  message!  : string;
+  message!: string;
 }
 
 export class RejectEstimateRequestDto {

@@ -9,6 +9,11 @@ export declare class EstimateService {
         status: import("../../../generated/prisma-client").$Enums.EstimateStatus;
         createdAt: Date;
         updatedAt: Date;
+        notes: string | null;
+        projectId: string;
+        subtotal: any;
+        tax: any;
+        total: any;
         items: {
             id: string;
             description: string;
@@ -16,17 +21,17 @@ export declare class EstimateService {
             unitPrice: any;
             totalPrice: any;
         }[];
-        notes: string | null;
-        projectId: string;
-        subtotal: any;
-        tax: any;
-        total: any;
     }>;
     findOne(id: string): Promise<{
         id: string;
         status: import("../../../generated/prisma-client").$Enums.EstimateStatus;
         createdAt: Date;
         updatedAt: Date;
+        notes: string | null;
+        projectId: string;
+        subtotal: any;
+        tax: any;
+        total: any;
         items: {
             id: string;
             description: string;
@@ -34,17 +39,17 @@ export declare class EstimateService {
             unitPrice: any;
             totalPrice: any;
         }[];
-        notes: string | null;
-        projectId: string;
-        subtotal: any;
-        tax: any;
-        total: any;
     }>;
     findByProject(projectId: string): Promise<{
         id: string;
         status: import("../../../generated/prisma-client").$Enums.EstimateStatus;
         createdAt: Date;
         updatedAt: Date;
+        notes: string | null;
+        projectId: string;
+        subtotal: any;
+        tax: any;
+        total: any;
         items: {
             id: string;
             description: string;
@@ -52,17 +57,17 @@ export declare class EstimateService {
             unitPrice: any;
             totalPrice: any;
         }[];
-        notes: string | null;
-        projectId: string;
-        subtotal: any;
-        tax: any;
-        total: any;
     }[]>;
     update(id: string, dto: UpdateEstimateDto): Promise<{
         id: string;
         status: import("../../../generated/prisma-client").$Enums.EstimateStatus;
         createdAt: Date;
         updatedAt: Date;
+        notes: string | null;
+        projectId: string;
+        subtotal: any;
+        tax: any;
+        total: any;
         items: {
             id: string;
             description: string;
@@ -70,11 +75,6 @@ export declare class EstimateService {
             unitPrice: any;
             totalPrice: any;
         }[];
-        notes: string | null;
-        projectId: string;
-        subtotal: any;
-        tax: any;
-        total: any;
     }>;
     updateItem(itemId: string, dto: UpdateEstimateItemDto): Promise<{
         id: string;

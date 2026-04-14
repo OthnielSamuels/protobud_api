@@ -12,16 +12,16 @@ import { HealthModule } from './api/health/health.module';
 
 @Module({
   imports: [
-    DatabaseModule,   // Global — single PrismaClient shared everywhere
-    LlmModule,        // Single-queue Ollama client
-    ChatModule,       // Orchestration hub — imports LlmModule + pipeline modules
+    DatabaseModule, // Global — single PrismaClient shared everywhere
+    LlmModule, // Single-queue Ollama client
+    ChatModule, // Orchestration hub — imports LlmModule + pipeline modules
     ClientModule,
     ProjectModule,
     EstimateModule,
     InvoiceModule,
-    WhatsappModule,   // Bot health check + operator send endpoint
-    PipelineModule,   // Operator workflow: review → price → notify → complete
-    HealthModule,   
+    WhatsappModule, // Bot health check + operator send endpoint
+    PipelineModule, // Operator workflow: review → price → notify → complete
+    HealthModule,
   ],
 })
 export class AppModule {}
