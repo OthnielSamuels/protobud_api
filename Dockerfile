@@ -1,7 +1,3 @@
-# =============================================================
-# NestJS Backend — Multi-stage Dockerfile
-# =============================================================
-
 # -----------------------------------------------------------
 # Stage 1: Builder
 # -----------------------------------------------------------
@@ -9,33 +5,48 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-RUN npm install -g pnpm
+# Enable pnpm via corepack (faster + recommended)
+RUN corepack enable
 
-COPY package.json pnpm-lock.yaml prisma.config.ts ./
+# Copy only dependency files first (CACHE OPTIMIZATION)
+COPY package.json pnpm-lock.yaml .npmrc ./
+
 RUN pnpm install --frozen-lockfile
 
+# Copy Prisma + source
+COPY prisma ./prisma
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
-COPY prisma/ ./prisma/
-COPY src/ ./src/
+COPY src ./src
 
+# Generate Prisma client (must be inside builder)
 RUN pnpm prisma generate
+
+# Build NestJS
 RUN pnpm run build
+
 
 # -----------------------------------------------------------
 # Stage 2: Production image
 # -----------------------------------------------------------
 FROM node:20-alpine AS production
 
-RUN apk add --no-cache wget
-
 WORKDIR /app
 
-COPY package.json ./
+RUN corepack enable
 
-# Copy everything needed from builder
-COPY --from=builder /app/node_modules ./node_modules
+# Copy dependency manifests
+COPY package.json pnpm-lock.yaml .npmrc ./
+
+# Install ONLY production deps
+RUN pnpm install --prod --frozen-lockfile
+
+# Copy build output
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/generated ./generated
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+# IMPORTANT: DO NOT use generated folder anymore
+# Prisma client should come from node_modules (standard mode)
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
