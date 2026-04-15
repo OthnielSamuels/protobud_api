@@ -11,6 +11,7 @@ const { createBotServer } = require('./server');
 const BACKEND_URL    = process.env.BACKEND_URL ?? 'http://nestjs-backend:3000';
 const CHAT_ENDPOINT  = `${BACKEND_URL}/chat/incoming`;
 const REQUEST_TIMEOUT_MS = parseInt(process.env.REQUEST_TIMEOUT_MS ?? '90000', 10);
+const CHROMIUM_EXECUTABLE = process.env.PUPPETEER_EXECUTABLE_PATH ?? '/usr/bin/chromium';
 
 // ---------------------------------------------------------------
 // Puppeteer args — tuned for low memory in Docker
@@ -18,7 +19,7 @@ const REQUEST_TIMEOUT_MS = parseInt(process.env.REQUEST_TIMEOUT_MS ?? '90000', 1
 const PUPPETEER_ARGS = [
   '--no-sandbox',
   '--disable-setuid-sandbox',
-  '--disable-dev-shm-usage',         // Prevents /dev/shm OOM in Docker
+  '--disable-dev-shm-usage',
   '--disable-accelerated-2d-canvas',
   '--disable-gpu',
   '--disable-extensions',
@@ -42,9 +43,9 @@ const PUPPETEER_ARGS = [
 // ---------------------------------------------------------------
 let isConnected = false;
 let waClient = null;
+let latestQR = null; // ← stores raw QR string for /qr endpoint
 
 // In-flight request tracker — one pending request per phone number
-// Prevents LLM queue flooding if a user sends multiple messages fast
 const inFlight = new Set();
 
 // ---------------------------------------------------------------
@@ -97,6 +98,7 @@ waClient = new Client({
 // ---------------------------------------------------------------
 
 waClient.on('qr', (qr) => {
+  latestQR = qr; // ← store for /qr endpoint
   console.log('[WhatsApp] Scan QR code to authenticate:');
   qrcode.generate(qr, { small: true });
   logActivity('qr_code_displayed', { small: true });
@@ -109,6 +111,7 @@ waClient.on('authenticated', () => {
 
 waClient.on('ready', () => {
   isConnected = true;
+  latestQR = null; // ← clear QR once authenticated
   console.log('[WhatsApp] Client ready and connected');
   logActivity('ready', { connected: true });
 });
@@ -117,7 +120,6 @@ waClient.on('auth_failure', (msg) => {
   console.error('[WhatsApp] Authentication failed:', msg);
   isConnected = false;
   logActivity('auth_failure', { message: msg });
-  // Exit so Docker restarts and shows a fresh QR
   process.exit(1);
 });
 
@@ -126,7 +128,6 @@ waClient.on('disconnected', (reason) => {
   isConnected = false;
   logActivity('disconnected', { reason });
 
-  // Attempt reconnect after brief delay
   setTimeout(() => {
     console.log('[WhatsApp] Attempting reconnect...');
     logActivity('reconnect_attempt', { attempt: 1 });
@@ -142,16 +143,14 @@ waClient.on('disconnected', (reason) => {
 // Inbound message handler
 // ---------------------------------------------------------------
 waClient.on('message', async (msg) => {
-  // Filter out non-relevant messages
   if (msg.isGroupMsg)                          return;
   if (msg.from === 'status@broadcast')         return;
   if (!msg.body || !msg.body.trim())           return;
-  if (msg.type !== 'chat')                     return; // text only
+  if (msg.type !== 'chat')                     return;
 
   const phone = msg.from;
   const text  = msg.body.trim();
 
-  // Drop duplicate if this phone is already waiting for LLM response
   if (inFlight.has(phone)) {
     console.log(`[WhatsApp] Dropping duplicate from ${phone} (in-flight)`);
     logActivity('duplicate_message', { phone, text });
@@ -185,7 +184,6 @@ waClient.on('message', async (msg) => {
 
 // ---------------------------------------------------------------
 // Forward message to NestJS backend
-// Native fetch — Node 18+, no axios needed
 // ---------------------------------------------------------------
 async function forwardToBackend(phone, message) {
   const controller = new AbortController();
@@ -222,12 +220,13 @@ async function forwardToBackend(phone, message) {
 }
 
 // ---------------------------------------------------------------
-// Start internal HTTP server (for /health and /send from NestJS)
+// Start internal HTTP server
 // ---------------------------------------------------------------
 createBotServer(
   () => waClient,
   () => isConnected,
   () => getActivityLog(),
+  () => latestQR, // ← pass QR getter
 );
 
 // ---------------------------------------------------------------
@@ -238,16 +237,13 @@ async function shutdown(signal) {
   isConnected = false;
   try {
     await waClient.destroy();
-  } catch (_) {
-    // Ignore cleanup errors
-  }
+  } catch (_) {}
   process.exit(0);
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
 
-// Catch unhandled promise rejections — don't crash silently
 process.on('unhandledRejection', (reason) => {
   console.error('[WhatsApp] Unhandled rejection:', reason);
 });
@@ -257,6 +253,21 @@ process.on('unhandledRejection', (reason) => {
 // ---------------------------------------------------------------
 console.log('[WhatsApp] Starting bot...');
 console.log(`[WhatsApp] Backend: ${BACKEND_URL}`);
+
+const LOCK_PATHS = [
+  '/app/.wwebjs_auth',
+  '/app/.wwebjs_cache',
+];
+
+for (const basePath of LOCK_PATHS) {
+  for (const lock of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
+    const lockPath = `${basePath}/${lock}`;
+    if (fs.existsSync(lockPath)) {
+      fs.rmSync(lockPath);
+      console.log(`[WhatsApp] Removed stale lock: ${lockPath}`);
+    }
+  }
+}
 
 waClient.initialize().catch((err) => {
   console.error('[WhatsApp] Fatal init error:', err.message);

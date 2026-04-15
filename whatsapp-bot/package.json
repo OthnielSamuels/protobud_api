@@ -7,6 +7,7 @@
     "start": "node src/index.js"
   },
   "dependencies": {
+    "qrcode": "^1.5.4",
     "whatsapp-web.js": "^1.23.0",
     "qrcode-terminal": "^0.12.0"
   }

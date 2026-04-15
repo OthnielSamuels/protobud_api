@@ -1,6 +1,7 @@
 'use strict';
 
 const http = require('http');
+const QRCode = require('qrcode'); // ← added
 
 /**
  * Minimal HTTP server running inside the WhatsApp bot process.
@@ -10,15 +11,15 @@ const http = require('http');
  *   GET  /health    → { connected: bool }
  *   GET  /status    → { connected, uptime, startTime }
  *   GET  /activity  → [{ timestamp, type, data }]
+ *   GET  /qr        → QR code PNG image (or message if already authenticated)
  *   GET  /          → HTML dashboard
  *   POST /send      → { phone, message } → sends via WA client
  */
-function createBotServer(getClient, getConnectionStatus, getActivityLog) {
+function createBotServer(getClient, getConnectionStatus, getActivityLog, getLatestQR) { // ← added getLatestQR
   const PORT = parseInt(process.env.BOT_HTTP_PORT ?? '3001', 10);
   const startTime = new Date();
 
   const server = http.createServer(async (req, res) => {
-    // CORS headers for dashboard frontend access
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -56,10 +57,7 @@ function createBotServer(getClient, getConnectionStatus, getActivityLog) {
       padding: 20px;
       text-align: center;
     }
-    .status-indicator {
-      font-size: 32px;
-      margin-bottom: 10px;
-    }
+    .status-indicator { font-size: 32px; margin-bottom: 10px; }
     .status-label { font-size: 12px; color: #a09090; text-transform: uppercase; margin-bottom: 8px; }
     .status-value { font-size: 18px; font-weight: bold; font-family: 'IBM Plex Mono', monospace; }
     .connected { color: #3dd68c; }
@@ -102,6 +100,7 @@ function createBotServer(getClient, getConnectionStatus, getActivityLog) {
     <div class="controls">
       <button onclick="refresh()">Refresh</button>
       <button onclick="clearLogs()">Clear Log</button>
+      <button onclick="window.open('/qr')">Show QR Code</button>
     </div>
 
     <div class="status-grid">
@@ -129,21 +128,17 @@ function createBotServer(getClient, getConnectionStatus, getActivityLog) {
   </div>
 
   <script>
-    let lastUpdate = Date.now();
-
     async function refresh() {
       try {
         const status = await fetch('/status').then(r => r.json());
         const activity = await fetch('/activity').then(r => r.json());
         
-        // Update status
         const connected = status.connected;
         document.getElementById('status-icon').textContent = connected ? '●' : '○';
         document.getElementById('status-icon').className = connected ? 'connected' : 'disconnected';
         document.getElementById('status-text').textContent = connected ? 'Connected' : 'Disconnected';
         document.getElementById('status-text').className = connected ? 'connected' : 'disconnected';
         
-        // Update uptime
         const uptimeSec = Math.floor(status.uptime);
         const uptimeMin = Math.floor(uptimeSec / 60);
         const uptimeHr = Math.floor(uptimeMin / 60);
@@ -154,11 +149,8 @@ function createBotServer(getClient, getConnectionStatus, getActivityLog) {
         if (uptimeMin % 60 > 0) uptimeStr += (uptimeMin % 60) + 'm';
         document.getElementById('uptime').textContent = uptimeStr || '0m';
         
-        // Update timestamp
-        const now = new Date().toLocaleTimeString();
-        document.getElementById('updated').textContent = now;
+        document.getElementById('updated').textContent = new Date().toLocaleTimeString();
         
-        // Update activity log
         const logDiv = document.getElementById('activity-log');
         if (activity.length === 0) {
           logDiv.innerHTML = '<div class="empty-state">No activity yet</div>';
@@ -168,7 +160,7 @@ function createBotServer(getClient, getConnectionStatus, getActivityLog) {
             const dataStr = JSON.stringify(entry.data).substring(0, 100);
             return \`<div class="activity-entry">
               <span class="activity-time">\${time}</span>
-              <span class="activity-type">\${entry.type}</span>
+              <span class="activity-type"> \${entry.type}</span>
               <div class="activity-data">\${dataStr}</div>
             </div>\`;
           }).join('');
@@ -180,12 +172,10 @@ function createBotServer(getClient, getConnectionStatus, getActivityLog) {
 
     function clearLogs() {
       if (confirm('Clear all logs?')) {
-        // Can't clear from frontend, just refresh
         refresh();
       }
     }
 
-    // Initial load and auto-refresh
     refresh();
     setInterval(refresh, 2000);
   </script>
@@ -219,13 +209,34 @@ function createBotServer(getClient, getConnectionStatus, getActivityLog) {
       return;
     }
 
+    // ← QR code image endpoint
+    if (req.method === 'GET' && req.url === '/qr') {
+      const qr = getLatestQR();
+      if (!qr) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`<!DOCTYPE html><html><body style="font-family:sans-serif;background:#0d0a0a;color:#3dd68c;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+          <h2>✅ No QR code — bot is already authenticated.</h2>
+        </body></html>`);
+        return;
+      }
+      try {
+        const png = await QRCode.toBuffer(qr, { scale: 8 });
+        res.writeHead(200, { 'Content-Type': 'image/png' });
+        res.end(png);
+      } catch (err) {
+        console.error('[BotServer] QR generation error:', err.message);
+        res.writeHead(500);
+        res.end('Failed to generate QR image');
+      }
+      return;
+    }
+
     // Send message
     if (req.method === 'POST' && req.url === '/send') {
       let body = '';
 
       req.on('data', (chunk) => {
         body += chunk;
-        // Basic request size guard — reject >16KB
         if (body.length > 16_384) {
           res.writeHead(413);
           res.end('Payload too large');
@@ -265,7 +276,7 @@ function createBotServer(getClient, getConnectionStatus, getActivityLog) {
       return;
     }
 
-    // 404 for everything else
+    // 404
     res.writeHead(404);
     res.end('Not found');
   });
