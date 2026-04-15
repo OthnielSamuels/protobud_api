@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/database.service';
 import { CreateInvoiceDto, UpdateInvoiceDto } from '../dto/invoice.dto';
-import { Prisma } from '../../../generated/prisma-client/client';
+import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
 
 const INVOICE_SELECT = {

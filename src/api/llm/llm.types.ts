@@ -1,4 +1,4 @@
-import { MessageRole } from '../../../generated/prisma-client/client';
+import { MessageRole } from '@prisma/client';
 
 // ---------------------------------------------------------------
 // Input types

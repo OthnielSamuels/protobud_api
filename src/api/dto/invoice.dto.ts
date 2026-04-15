@@ -6,7 +6,7 @@ import {
   IsDateString,
   Length,
 } from 'class-validator';
-import { InvoiceStatus } from '../../../generated/prisma-client/client';
+import { InvoiceStatus } from '@prisma/client';
 
 export class CreateInvoiceDto {
   @IsUUID()

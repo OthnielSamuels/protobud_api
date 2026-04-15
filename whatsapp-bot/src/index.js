@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('fs');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { createBotServer } = require('./server');
@@ -17,11 +18,8 @@ const REQUEST_TIMEOUT_MS = parseInt(process.env.REQUEST_TIMEOUT_MS ?? '90000', 1
 const PUPPETEER_ARGS = [
   '--no-sandbox',
   '--disable-setuid-sandbox',
-  '--disable-dev-shm-usage',         // Critical: prevents /dev/shm OOM in Docker
+  '--disable-dev-shm-usage',         // Prevents /dev/shm OOM in Docker
   '--disable-accelerated-2d-canvas',
-  '--no-first-run',
-  '--no-zygote',
-  '--single-process',                // Reduces process count and memory
   '--disable-gpu',
   '--disable-extensions',
   '--disable-background-networking',
@@ -30,13 +28,32 @@ const PUPPETEER_ARGS = [
   '--disable-translate',
   '--hide-scrollbars',
   '--mute-audio',
+  '--no-first-run',
   '--no-default-browser-check',
   '--disable-component-update',
   '--disable-domain-reliability',
   '--disable-print-preview',
   '--disable-client-side-phishing-detection',
   '--disable-features=AudioServiceOutOfProcess',
+  '--disable-crash-reporter',
 ];
+
+const FALLBACK_CHROMIUM_PATHS = [
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/chrome',
+];
+
+const CHROMIUM_EXECUTABLE = (() => {
+  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (envPath && fs.existsSync(envPath)) {
+    return envPath;
+  }
+
+  const found = FALLBACK_CHROMIUM_PATHS.find((path) => fs.existsSync(path));
+  return found ?? '/usr/bin/chromium';
+})();
 
 // ---------------------------------------------------------------
 // State
@@ -58,7 +75,7 @@ waClient = new Client({
   puppeteer: {
     headless: true,
     args: PUPPETEER_ARGS,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH ?? '/usr/bin/chromium',
+    executablePath: CHROMIUM_EXECUTABLE,
   },
   webVersionCache: {
     type: 'local',

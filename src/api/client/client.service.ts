@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/database.service';
 import { CreateClientDto, UpdateClientDto } from '../dto/client.dto';
-import { Prisma } from '../../../generated/prisma-client/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
 // Select only what we need — avoid pulling unnecessary columns
 const CLIENT_SELECT = {

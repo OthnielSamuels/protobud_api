@@ -13,7 +13,7 @@ import {
   ConversationStatus,
   EstimateStatus,
   InvoiceStatus,
-} from '../../../generated/prisma-client/client';
+} from '@prisma/client';
 
 export interface FinalizeEstimateDto {
   estimateId: string;

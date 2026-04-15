@@ -5,7 +5,7 @@ import {
   ConversationStatus,
   MessageRole,
   Prisma,
-} from '../../../generated/prisma-client/client';
+} from '@prisma/client';
 
 // How many messages we pull for LLM context — keep low to save VRAM
 const CONTEXT_WINDOW = 5;

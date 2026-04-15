@@ -13,7 +13,7 @@ import {
   PrintMaterial,
   PrintQuality,
   ProjectStatus,
-} from '../../../generated/prisma-client/client';
+} from '@prisma/client';
 
 export class CreateProjectDto {
   @IsUUID()

@@ -12,16 +12,13 @@ const CHAT_ENDPOINT  = `${BACKEND_URL}/chat/incoming`;
 const REQUEST_TIMEOUT_MS = parseInt(process.env.REQUEST_TIMEOUT_MS ?? '90000', 10);
 
 // ---------------------------------------------------------------
-// Puppeteer args — tuned for low memory in Docker
+// Puppeteer args — tuned for low mem   ory in Docker
 // ---------------------------------------------------------------
 const PUPPETEER_ARGS = [
   '--no-sandbox',
   '--disable-setuid-sandbox',
-  '--disable-dev-shm-usage',         // Critical: prevents /dev/shm OOM in Docker
+  '--disable-dev-shm-usage',
   '--disable-accelerated-2d-canvas',
-  '--no-first-run',
-  '--no-zygote',
-  '--single-process',                // Reduces process count and memory
   '--disable-gpu',
   '--disable-extensions',
   '--disable-background-networking',
@@ -30,12 +27,15 @@ const PUPPETEER_ARGS = [
   '--disable-translate',
   '--hide-scrollbars',
   '--mute-audio',
+  '--no-first-run',
   '--no-default-browser-check',
   '--disable-component-update',
   '--disable-domain-reliability',
   '--disable-print-preview',
   '--disable-client-side-phishing-detection',
   '--disable-features=AudioServiceOutOfProcess',
+  '--disable-crash-reporter',      // ← add this
+  '--disable-breakpad',            // ← add this too (older flag for same thing)
 ];
 
 // ---------------------------------------------------------------
@@ -219,6 +219,20 @@ process.on('unhandledRejection', (reason) => {
 console.log('[WhatsApp] Starting bot...');
 console.log(`[WhatsApp] Backend: ${BACKEND_URL}`);
 
+waClient.initialize().catch((err) => {
+  console.error('[WhatsApp] Fatal init error:', err.message);
+  process.exit(1);
+});
+
+const fs = require('fs');
+const execPath = process.env.PUPPETEER_EXECUTABLE_PATH ?? '/usr/bin/chromium';
+
+if (!fs.existsSync(execPath)) {
+  console.error(`[WhatsApp] Chromium not found at: ${execPath}`);
+  process.exit(1);
+}
+
+console.log(`[WhatsApp] Using Chromium at: ${execPath}`);
 waClient.initialize().catch((err) => {
   console.error('[WhatsApp] Fatal init error:', err.message);
   process.exit(1);
