@@ -35,25 +35,7 @@ const PUPPETEER_ARGS = [
   '--disable-print-preview',
   '--disable-client-side-phishing-detection',
   '--disable-features=AudioServiceOutOfProcess',
-  '--disable-crash-reporter',
 ];
-
-const FALLBACK_CHROMIUM_PATHS = [
-  '/usr/bin/chromium',
-  '/usr/bin/chromium-browser',
-  '/usr/bin/google-chrome-stable',
-  '/usr/bin/chrome',
-];
-
-const CHROMIUM_EXECUTABLE = (() => {
-  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
-  if (envPath && fs.existsSync(envPath)) {
-    return envPath;
-  }
-
-  const found = FALLBACK_CHROMIUM_PATHS.find((path) => fs.existsSync(path));
-  return found ?? '/usr/bin/chromium';
-})();
 
 // ---------------------------------------------------------------
 // State
@@ -64,6 +46,33 @@ let waClient = null;
 // In-flight request tracker — one pending request per phone number
 // Prevents LLM queue flooding if a user sends multiple messages fast
 const inFlight = new Set();
+
+// ---------------------------------------------------------------
+// Activity Log — track last 100 events for dashboard
+// ---------------------------------------------------------------
+const activityLog = [];
+const MAX_LOGS = 100;
+
+function logActivity(type, data) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    type,
+    data,
+  };
+  activityLog.push(entry);
+  console.log(`[Activity] ${type}:`, data);
+  if (activityLog.length > MAX_LOGS) {
+    activityLog.shift();
+  }
+}
+
+function getActivityLog() {
+  return activityLog;
+}
+
+function getConnectionStatus() {
+  return isConnected;
+}
 
 // ---------------------------------------------------------------
 // WhatsApp Client
@@ -90,20 +99,24 @@ waClient = new Client({
 waClient.on('qr', (qr) => {
   console.log('[WhatsApp] Scan QR code to authenticate:');
   qrcode.generate(qr, { small: true });
+  logActivity('qr_code_displayed', { small: true });
 });
 
 waClient.on('authenticated', () => {
   console.log('[WhatsApp] Authenticated successfully');
+  logActivity('authenticated', { status: 'success' });
 });
 
 waClient.on('ready', () => {
   isConnected = true;
   console.log('[WhatsApp] Client ready and connected');
+  logActivity('ready', { connected: true });
 });
 
 waClient.on('auth_failure', (msg) => {
   console.error('[WhatsApp] Authentication failed:', msg);
   isConnected = false;
+  logActivity('auth_failure', { message: msg });
   // Exit so Docker restarts and shows a fresh QR
   process.exit(1);
 });
@@ -111,12 +124,15 @@ waClient.on('auth_failure', (msg) => {
 waClient.on('disconnected', (reason) => {
   console.warn('[WhatsApp] Disconnected:', reason);
   isConnected = false;
+  logActivity('disconnected', { reason });
 
   // Attempt reconnect after brief delay
   setTimeout(() => {
     console.log('[WhatsApp] Attempting reconnect...');
+    logActivity('reconnect_attempt', { attempt: 1 });
     waClient.initialize().catch((err) => {
       console.error('[WhatsApp] Reconnect failed:', err.message);
+      logActivity('reconnect_failed', { error: err.message });
       process.exit(1);
     });
   }, 5_000);
@@ -138,24 +154,29 @@ waClient.on('message', async (msg) => {
   // Drop duplicate if this phone is already waiting for LLM response
   if (inFlight.has(phone)) {
     console.log(`[WhatsApp] Dropping duplicate from ${phone} (in-flight)`);
+    logActivity('duplicate_message', { phone, text });
     return;
   }
 
   inFlight.add(phone);
   console.log(`[WhatsApp] Incoming from ${phone}: "${text.substring(0, 80)}"`);
+  logActivity('incoming_message', { phone, text: text.substring(0, 100) });
 
   try {
     const reply = await forwardToBackend(phone, text);
     await msg.reply(reply);
     console.log(`[WhatsApp] Replied to ${phone}`);
+    logActivity('reply_sent', { phone, replyLength: reply.length });
   } catch (err) {
     console.error(`[WhatsApp] Handler error for ${phone}:`, err.message);
+    logActivity('handler_error', { phone, error: err.message });
     try {
       await msg.reply(
         'Sorry, something went wrong on our end. Please try again in a moment.',
       );
     } catch (replyErr) {
       console.error('[WhatsApp] Could not send fallback reply:', replyErr.message);
+      logActivity('fallback_reply_failed', { phone, error: replyErr.message });
     }
   } finally {
     inFlight.delete(phone);
@@ -206,6 +227,7 @@ async function forwardToBackend(phone, message) {
 createBotServer(
   () => waClient,
   () => isConnected,
+  () => getActivityLog(),
 );
 
 // ---------------------------------------------------------------

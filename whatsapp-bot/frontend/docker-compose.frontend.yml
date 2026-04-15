@@ -1,0 +1,36 @@
+# ─────────────────────────────────────────────────────────
+# Add this service to your existing docker-compose.yml
+# (or use this as a standalone compose file for the frontend)
+# ─────────────────────────────────────────────────────────
+version: '3.9'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: protobud-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"           # Access the panel at http://localhost:8080
+    depends_on:
+      - nestjs-backend      # Your existing backend service name
+    networks:
+      - app-network         # Must match your existing backend network
+
+    # Resource limits — lightweight static server
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+
+# ─────────────────────────────────────────────────────────
+# If you're adding this to your EXISTING docker-compose.yml,
+# just copy the `frontend` service block above.
+# Make sure `app-network` matches your existing network name.
+# ─────────────────────────────────────────────────────────
+
+networks:
+  app-network:
+    external: true    # Reference your existing network
