@@ -44,12 +44,18 @@ COPY src/ ./src/
 # Auth and cache dirs — backed by Docker volumes
 RUN mkdir -p .wwebjs_auth .wwebjs_cache
 
+RUN mkdir -p .wwebjs_auth .wwebjs_cache /home/botuser/.config /home/botuser/.cache
+
+ENV HOME=/home/botuser
+ENV XDG_CONFIG_HOME=/home/botuser/.config
+ENV XDG_CACHE_HOME=/home/botuser/.cache
+
 # Non-root user with access to audio/video (Chromium requirement)
 RUN groupadd -r botuser && useradd -r -g botuser -G audio,video botuser \
-    && chown -R botuser:botuser /app
+    && chown -R botuser:botuser /app /home/botuser
 
 USER botuser
 
 EXPOSE 3001
 
-CMD ["node", "src/index.js"]
+CMD ["node", "./src/index.js"]

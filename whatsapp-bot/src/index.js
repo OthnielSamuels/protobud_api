@@ -36,6 +36,7 @@ const PUPPETEER_ARGS = [
   '--disable-print-preview',
   '--disable-client-side-phishing-detection',
   '--disable-features=AudioServiceOutOfProcess',
+   '--disable-crash-reporter', 
 ];
 
 // ---------------------------------------------------------------
