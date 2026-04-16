@@ -52,14 +52,15 @@ export class ChatController {
     } else {
       // 3b. invoice_intent — LLM has collected enough info, create records
       const payload = llmResponse.payload;
+      const resolvedPhone = payload.client.phone?.trim() || dto.phone;
 
       try {
         // Upsert client (may already exist from a previous conversation)
-        let client = await this.clientService.findByPhone(payload.client.phone);
+        let client = await this.clientService.findByPhone(resolvedPhone);
         if (!client) {
           client = await this.clientService.create({
             name: payload.client.name,
-            phone: payload.client.phone,
+            phone: resolvedPhone,
             email: payload.client.email ?? undefined,
             company: payload.client.company ?? undefined,
           });

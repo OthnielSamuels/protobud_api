@@ -1,8 +1,8 @@
-import { MessageRole } from '@prisma/client';
-
 // ---------------------------------------------------------------
 // Input types
 // ---------------------------------------------------------------
+
+export type MessageRole = 'user' | 'assistant' | 'system';
 
 export interface LlmMessage {
   role: MessageRole;
@@ -28,7 +28,7 @@ export interface LlmTextResponse {
 export interface InvoiceIntentPayload {
   client: {
     name: string;
-    phone: string;
+    phone?: string;
     email?: string;
     company?: string;
   };

@@ -59,8 +59,11 @@ function validateInvoicePayload(payload: unknown): string | null {
   const client = p.client as Record<string, unknown>;
   if (typeof client.name !== 'string' || !client.name.trim())
     return 'client.name is required';
-  if (typeof client.phone !== 'string' || !client.phone.trim())
-    return 'client.phone is required';
+  if (client.phone !== null && client.phone !== undefined) {
+    if (typeof client.phone !== 'string' || !client.phone.trim()) {
+      return 'client.phone must be a non-empty string when provided';
+    }
+  }
 
   // project validation
   if (!p.project || typeof p.project !== 'object')
