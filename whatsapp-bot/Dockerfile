@@ -28,6 +28,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxkbcommon0 \
     libxrandr2 \
     libxtst6 \
+    libasound2 \
+    libxshmfence1 \
+    libxss1 \
+    libgtk-3-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Skip bundled Chromium download — use system package instead

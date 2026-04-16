@@ -57,7 +57,7 @@
       restart: unless-stopped
       env_file: .env
       environment:
-        DATABASE_URL: ${DATABASE_URL}
+        DATABASE_URL: postgresql://${POSTGRES_USER:-protobot}:${POSTGRES_PASSWORD:-protobot}@postgres:5432/${POSTGRES_DB:-protobot}
         OLLAMA_HOST:  http://ollama:11434
         NODE_ENV:     development
       ports:

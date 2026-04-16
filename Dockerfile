@@ -34,10 +34,14 @@ RUN pnpm install --prod --frozen-lockfile
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
+COPY prisma ./prisma
+COPY backend-entrypoint.sh ./entrypoint.sh
+
+RUN chmod +x ./entrypoint.sh
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
 EXPOSE 3000
 
-CMD ["node", "dist/main"]
+ENTRYPOINT ["./entrypoint.sh"]

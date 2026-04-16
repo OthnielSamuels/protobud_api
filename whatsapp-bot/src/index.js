@@ -16,26 +16,32 @@ const CHROMIUM_EXECUTABLE = process.env.PUPPETEER_EXECUTABLE_PATH ?? '/usr/bin/c
 // ---------------------------------------------------------------
 // Puppeteer args — tuned for low memory in Docker
 // ---------------------------------------------------------------
+// const PUPPETEER_ARGS = [
+//   '--no-sandbox',
+//   '--disable-setuid-sandbox',
+//   '--disable-dev-shm-usage',
+//   '--disable-accelerated-2d-canvas',
+//   '--disable-gpu',
+//   '--disable-extensions',
+//   '--disable-background-networking',
+//   '--disable-default-apps',
+//   '--disable-sync',
+//   '--disable-translate',
+//   '--hide-scrollbars',
+//   '--mute-audio',
+//   '--no-first-run',
+//   '--no-default-browser-check',
+//   '--disable-component-update',
+//   '--disable-domain-reliability',
+//   '--disable-print-preview',
+//   '--disable-client-side-phishing-detection',
+//   '--disable-features=AudioServiceOutOfProcess',
+// ];
+
 const PUPPETEER_ARGS = [
   '--no-sandbox',
   '--disable-setuid-sandbox',
   '--disable-dev-shm-usage',
-  '--disable-accelerated-2d-canvas',
-  '--disable-gpu',
-  '--disable-extensions',
-  '--disable-background-networking',
-  '--disable-default-apps',
-  '--disable-sync',
-  '--disable-translate',
-  '--hide-scrollbars',
-  '--mute-audio',
-  '--no-first-run',
-  '--no-default-browser-check',
-  '--disable-component-update',
-  '--disable-domain-reliability',
-  '--disable-print-preview',
-  '--disable-client-side-phishing-detection',
-  '--disable-features=AudioServiceOutOfProcess',
 ];
 
 // ---------------------------------------------------------------
@@ -87,10 +93,10 @@ waClient = new Client({
     args: PUPPETEER_ARGS,
     executablePath: CHROMIUM_EXECUTABLE,
   },
-  webVersionCache: {
-    type: 'local',
-    path: '/app/.wwebjs_cache',
-  },
+webVersionCache: {
+  type: 'remote',
+  remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/%VERSION%.html',
+}
 });
 
 // ---------------------------------------------------------------
@@ -161,15 +167,28 @@ waClient.on('message', async (msg) => {
   console.log(`[WhatsApp] Incoming from ${phone}: "${text.substring(0, 80)}"`);
   logActivity('incoming_message', { phone, text: text.substring(0, 100) });
 
+  let chat = null;
   try {
+    // Show typing indicator while the backend processes the request
+    chat = await msg.getChat();
+    await chat.sendStateTyping();
+
     const reply = await forwardToBackend(phone, text);
+
+    // Random 1–4 s delay: simulates human typing speed, reduces WA ban risk
+    const typingDelay = 1000 + Math.floor(Math.random() * 3000);
+    await new Promise((res) => setTimeout(res, typingDelay));
+
+    await chat.clearState();
     await msg.reply(reply);
-    console.log(`[WhatsApp] Replied to ${phone}`);
-    logActivity('reply_sent', { phone, replyLength: reply.length });
+    console.log(`[WhatsApp] Replied to ${phone} (delay: ${typingDelay}ms)`);
+    logActivity('reply_sent', { phone, replyLength: reply.length, typingDelay });
   } catch (err) {
     console.error(`[WhatsApp] Handler error for ${phone}:`, err.message);
+    console.error('[WhatsApp] Stack:', err.stack);
     logActivity('handler_error', { phone, error: err.message });
     try {
+      if (chat) await chat.clearState();
       await msg.reply(
         'Sorry, something went wrong on our end. Please try again in a moment.',
       );
@@ -188,6 +207,8 @@ waClient.on('message', async (msg) => {
 async function forwardToBackend(phone, message) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  console.log(`[WhatsApp] Forwarding to ${CHAT_ENDPOINT}`);
 
   try {
     const response = await fetch(CHAT_ENDPOINT, {
