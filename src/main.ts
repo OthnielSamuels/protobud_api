@@ -25,7 +25,13 @@ async function bootstrap() {
     }),
   );
 
-  // Internal API only — no CORS needed unless you add a frontend later
+  if (process.env.NODE_ENV === 'development') {
+    app.enableCors({
+      origin: true,
+      methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    });
+  }
+
   const port = process.env.PORT ?? 3000;
   await app.listen(port, '0.0.0.0');
   logger.log(`Backend running on port ${port}`);

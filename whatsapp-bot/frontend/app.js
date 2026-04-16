@@ -1,11 +1,14 @@
 'use strict';
 
+const DEFAULT_API_BASE =
+  window.location.protocol === 'file:' ? 'http://localhost:3000' : '/api';
+
 // =====================================================
 // CONFIG
 // =====================================================
 const CONFIG = {
   CREDENTIALS: { username: 'admin', password: 'admin' },
-  API_BASE: window.API_BASE || '',
+  API_BASE: window.API_BASE || DEFAULT_API_BASE,
   SESSION_KEY: 'protobud_session',
   REFRESH_INTERVAL: 30_000,
 };

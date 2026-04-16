@@ -7,16 +7,14 @@ version: '3.9'
 services:
   frontend:
     build:
-      context: ./frontend
+      context: .
       dockerfile: Dockerfile
     container_name: protobud-frontend
     restart: unless-stopped
     ports:
       - "8080:80"           # Access the panel at http://localhost:8080
-    depends_on:
-      - nestjs-backend      # Your existing backend service name
     networks:
-      - app-network         # Must match your existing backend network
+      - protobot-net        # Must match the backend docker-compose network
 
     # Resource limits — lightweight static server
     deploy:
@@ -32,5 +30,5 @@ services:
 # ─────────────────────────────────────────────────────────
 
 networks:
-  app-network:
-    external: true    # Reference your existing network
+  protobot-net:
+    external: true    # Reuse the backend docker-compose network

@@ -8,7 +8,7 @@ RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/app.conf
 
 # Copy static assets
-COPY src/ /usr/share/nginx/html/
+COPY . /usr/share/nginx/html/
 
 # Non-root nginx user (nginx:alpine already has it)
 RUN chown -R nginx:nginx /usr/share/nginx/html && \
