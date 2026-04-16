@@ -48,6 +48,11 @@ COPY src/ ./src/
 # Auth and cache dirs — backed by Docker volumes
 RUN mkdir -p .wwebjs_auth .wwebjs_cache
 
+COPY entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
+ENTRYPOINT ["./entrypoint.sh"]
+
 RUN mkdir -p .wwebjs_auth .wwebjs_cache /home/botuser/.config /home/botuser/.cache
 
 ENV HOME=/home/botuser
