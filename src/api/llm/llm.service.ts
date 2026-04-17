@@ -1,5 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import {
+  LlmEvent,
+  LlmEventType,
   LlmRequest,
   LlmResponse,
   OllamaRequestBody,
@@ -31,9 +33,14 @@ export class LlmService implements OnModuleDestroy {
   private readonly queue: QueueItem[] = [];
   private isProcessing = false;
 
+  // Event tracking — circular buffer, last 200 events
+  private readonly eventBuffer: LlmEvent[] = [];
+  private eventCounter = 0;
+  private readonly MAX_EVENTS = 200;
+
   constructor() {
     this.ollamaHost = process.env.OLLAMA_HOST ?? 'http://ollama:11434';
-    this.model = process.env.OLLAMA_MODEL ?? 'qwen2.5:3b-instruct-q4_K_M';
+    this.model = process.env.OLLAMA_MODEL ?? 'qwen3.5:4b-instruct-q4_K_M';
     this.timeoutMs = parseInt(process.env.OLLAMA_TIMEOUT_MS ?? '60000', 10);
     this.maxRetries = parseInt(process.env.OLLAMA_MAX_RETRIES ?? '2', 10);
   }
@@ -43,6 +50,48 @@ export class LlmService implements OnModuleDestroy {
     while (this.queue.length > 0) {
       const item = this.queue.shift()!;
       item.reject(new Error('Service shutting down'));
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // PUBLIC: Event access
+  // ---------------------------------------------------------------
+
+  /** Returns all buffered events, newest first. */
+  getEvents(): LlmEvent[] {
+    return [...this.eventBuffer].reverse();
+  }
+
+  /** Returns current queue/processing state. */
+  getStatus(): { isProcessing: boolean; queueDepth: number; model: string } {
+    return {
+      isProcessing: this.isProcessing,
+      queueDepth: this.queue.length,
+      model: this.model,
+    };
+  }
+
+  // ---------------------------------------------------------------
+  // PRIVATE: Event emitter
+  // ---------------------------------------------------------------
+
+  private emitEvent(
+    type: LlmEventType,
+    conversationId: string,
+    extra: Partial<
+      Omit<LlmEvent, 'id' | 'timestamp' | 'type' | 'conversationId'>
+    > = {},
+  ): void {
+    const event: LlmEvent = {
+      id: ++this.eventCounter,
+      timestamp: new Date().toISOString(),
+      type,
+      conversationId,
+      ...extra,
+    };
+    this.eventBuffer.push(event);
+    if (this.eventBuffer.length > this.MAX_EVENTS) {
+      this.eventBuffer.shift();
     }
   }
 
@@ -59,6 +108,9 @@ export class LlmService implements OnModuleDestroy {
       this.logger.log(
         `LLM queue: +1 (depth=${this.queue.length}, conversationId=${request.conversationId})`,
       );
+      this.emitEvent('queued', request.conversationId, {
+        queueDepth: this.queue.length,
+      });
       // Kick off processing if not already running
       this.processNext();
     });
@@ -111,27 +163,51 @@ export class LlmService implements OnModuleDestroy {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      const attemptStart = Date.now();
       try {
         this.logger.log(
           `Ollama call attempt ${attempt}/${this.maxRetries} (conversationId=${request.conversationId})`,
         );
+        this.emitEvent('thinking', request.conversationId, {
+          attempt,
+          maxRetries: this.maxRetries,
+        });
 
         const raw = await this.fetchWithTimeout(body);
         const parsed = parseLlmResponse(raw);
+        const durationMs = Date.now() - attemptStart;
 
         this.logger.log(
           `Ollama response type=${parsed.type} (conversationId=${request.conversationId})`,
         );
+        this.emitEvent('responded', request.conversationId, {
+          attempt,
+          responseType: parsed.type,
+          responsePreview:
+            parsed.type === 'text'
+              ? parsed.content.slice(0, 120)
+              : JSON.stringify(parsed.payload).slice(0, 120),
+          durationMs,
+        });
 
         return parsed;
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
+        const durationMs = Date.now() - attemptStart;
         this.logger.warn(
           `Ollama attempt ${attempt} failed: ${lastError.message}`,
         );
 
+        const isFinal = attempt >= this.maxRetries;
+        this.emitEvent(isFinal ? 'error' : 'retry', request.conversationId, {
+          attempt,
+          maxRetries: this.maxRetries,
+          errorMessage: lastError.message,
+          durationMs,
+        });
+
         // Don't retry on the last attempt
-        if (attempt < this.maxRetries) {
+        if (!isFinal) {
           // Brief pause before retry — don't hammer a struggling model
           await this.sleep(1500 * attempt);
         }

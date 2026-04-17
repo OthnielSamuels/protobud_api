@@ -51,10 +51,7 @@ export class ClientController {
   // PATCH /clients/:id
   // -----------------------------------------------------------
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateClientDto,
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdateClientDto) {
     return this.clientService.update(id, dto);
   }
 

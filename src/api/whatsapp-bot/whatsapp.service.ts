@@ -28,6 +28,8 @@ export class WhatsappService {
    * @param text   Message text to send
    */
   async sendMessage(phone: string, text: string): Promise<boolean> {
+    const normalizedPhone = this.normalizeWhatsappPhone(phone);
+
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10_000);
@@ -35,7 +37,7 @@ export class WhatsappService {
       const response = await fetch(`${this.botUrl}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, message: text }),
+        body: JSON.stringify({ phone: normalizedPhone, message: text }),
         signal: controller.signal,
       });
 
@@ -46,7 +48,7 @@ export class WhatsappService {
         return false;
       }
 
-      this.logger.log(`Message sent to ${phone}`);
+      this.logger.log(`Message sent to ${normalizedPhone}`);
       return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -81,5 +83,15 @@ export class WhatsappService {
     } catch {
       return { connected: false, status: 'bot_unreachable' };
     }
+  }
+
+  private normalizeWhatsappPhone(phone: string): string {
+    const trimmed = phone.trim();
+    if (trimmed.endsWith('@c.us') || trimmed.endsWith('@s.whatsapp.net')) {
+      return trimmed;
+    }
+
+    const digits = trimmed.replace(/[^\d]/g, '');
+    return digits ? `${digits}@c.us` : trimmed;
   }
 }

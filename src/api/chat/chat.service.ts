@@ -1,11 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/database.service';
 import { IncomingMessageDto } from '../dto/incoming-message.dto';
-import {
-  ConversationStatus,
-  MessageRole,
-  Prisma,
-} from '@prisma/client';
+import { ConversationStatus, MessageRole, Prisma } from '@prisma/client';
 
 // How many messages we pull for LLM context — keep low to save VRAM
 const CONTEXT_WINDOW = 5;

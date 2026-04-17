@@ -77,3 +77,28 @@ export interface OllamaResponse {
   done: boolean;
   total_duration?: number;
 }
+
+// ---------------------------------------------------------------
+// LLM event tracking
+// ---------------------------------------------------------------
+
+export type LlmEventType =
+  | 'queued' // request added to queue
+  | 'thinking' // Ollama call attempt started
+  | 'responded' // Ollama returned a successful response
+  | 'retry' // attempt failed, will retry
+  | 'error'; // final failure
+
+export interface LlmEvent {
+  id: number;
+  timestamp: string; // ISO string
+  type: LlmEventType;
+  conversationId: string;
+  queueDepth?: number; // for 'queued'
+  attempt?: number; // for 'thinking' / 'retry'
+  maxRetries?: number;
+  responseType?: string; // for 'responded'
+  responsePreview?: string; // first 120 chars of response
+  durationMs?: number; // time from thinking → responded
+  errorMessage?: string; // for 'retry' / 'error'
+}

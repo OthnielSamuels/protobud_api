@@ -35,10 +35,7 @@ export class EstimateController {
   }
 
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateEstimateDto,
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdateEstimateDto) {
     return this.estimateService.update(id, dto);
   }
 

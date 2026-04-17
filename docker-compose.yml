@@ -198,7 +198,7 @@
         OLLAMA_HOST: http://ollama:11434
       entrypoint: ["/bin/sh", "-c"]
       command: >
-        "ollama pull qwen2.5:3b-instruct-q4_K_M &&
+        "ollama pull qwen3.5:4b-instruct-q4_K_M &&
         echo 'Model ready'"
       networks:
         - protobot-net

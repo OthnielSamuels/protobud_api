@@ -170,7 +170,7 @@ docker volume ls | grep printbot
 
 Edit `.env`:
 ```
-OLLAMA_MODEL=qwen2.5:7b-instruct-q4_K_M
+OLLAMA_MODEL=qwen3.5:4b-instruct-q4_K_M
 ```
 
 Edit `ollama/entrypoint.sh` — the `MODEL=` line must match.

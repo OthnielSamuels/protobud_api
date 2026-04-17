@@ -74,13 +74,13 @@ function validateInvoicePayload(payload: unknown): string | null {
 
   if (project.material !== null && project.material !== undefined) {
     if (!VALID_MATERIALS.includes(project.material as string)) {
-      return `invalid material: ${project.material}`;
+      return `invalid material: ${JSON.stringify(project.material)}`;
     }
   }
 
   if (project.quality !== null && project.quality !== undefined) {
     if (!VALID_QUALITIES.includes(project.quality as string)) {
-      return `invalid quality: ${project.quality}`;
+      return `invalid quality: ${JSON.stringify(project.quality)}`;
     }
   }
 
@@ -101,6 +101,75 @@ function validateInvoicePayload(payload: unknown): string | null {
   return null;
 }
 
+function normalizeOptionalString(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeOptionalNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim());
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function normalizeResponseType(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase().replace(/-/g, '_');
+}
+
+function normalizeInvoicePayload(
+  payload: Record<string, unknown>,
+): InvoiceIntentPayload {
+  const clientRaw =
+    payload.client && typeof payload.client === 'object'
+      ? (payload.client as Record<string, unknown>)
+      : {};
+
+  const projectRaw =
+    payload.project && typeof payload.project === 'object'
+      ? (payload.project as Record<string, unknown>)
+      : {};
+
+  const itemsRaw = Array.isArray(payload.items) ? payload.items : [];
+
+  const material = normalizeOptionalString(projectRaw.material)?.toUpperCase();
+  const quality = normalizeOptionalString(projectRaw.quality)?.toLowerCase();
+
+  return {
+    client: {
+      name: normalizeOptionalString(clientRaw.name) ?? '',
+      phone: normalizeOptionalString(clientRaw.phone),
+      email: normalizeOptionalString(clientRaw.email),
+      company: normalizeOptionalString(clientRaw.company),
+    },
+    project: {
+      name: normalizeOptionalString(projectRaw.name) ?? '',
+      description: normalizeOptionalString(projectRaw.description),
+      material,
+      quality,
+      weightGrams: normalizeOptionalNumber(projectRaw.weightGrams),
+      printHours: normalizeOptionalNumber(projectRaw.printHours),
+      notes: normalizeOptionalString(projectRaw.notes),
+    },
+    items: itemsRaw.map((item) => {
+      const itemRaw =
+        item && typeof item === 'object'
+          ? (item as Record<string, unknown>)
+          : {};
+      return {
+        description: normalizeOptionalString(itemRaw.description) ?? '',
+        quantity: normalizeOptionalNumber(itemRaw.quantity) ?? 0,
+      };
+    }),
+  };
+}
+
 /**
  * Main parse function.
  * Returns a typed LlmResponse — either plain text or a validated invoice intent.
@@ -115,13 +184,16 @@ export function parseLlmResponse(raw: string): LlmResponse {
     try {
       const parsed = JSON.parse(jsonCandidate) as Record<string, unknown>;
 
-      if (parsed.type === 'invoice_intent') {
-        // Build the payload object from parsed data
-        const payload = {
-          client: parsed.client,
-          project: parsed.project,
-          items: parsed.items,
-        };
+      if (normalizeResponseType(parsed.type) === 'invoice_intent') {
+        // Support both formats:
+        // 1) top-level client/project/items
+        // 2) payload: { client, project, items }
+        const payloadRoot =
+          parsed.payload && typeof parsed.payload === 'object'
+            ? (parsed.payload as Record<string, unknown>)
+            : parsed;
+
+        const payload = normalizeInvoicePayload(payloadRoot);
 
         const validationError = validateInvoicePayload(payload);
 
@@ -135,12 +207,14 @@ export function parseLlmResponse(raw: string): LlmResponse {
 
         return {
           type: 'invoice_intent',
-          payload: payload as InvoiceIntentPayload,
+          payload,
         } satisfies LlmInvoiceIntentResponse;
       }
 
       // JSON parsed but not invoice_intent — treat as text
-      logger.warn(`Unexpected JSON type: ${parsed.type}. Treating as text.`);
+      logger.warn(
+        `Unexpected JSON type: ${JSON.stringify(parsed.type)}. Treating as text.`,
+      );
     } catch {
       // JSON.parse failed — treat as plain text
       logger.warn('JSON candidate found but parse failed. Treating as text.');

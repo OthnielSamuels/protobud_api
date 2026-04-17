@@ -8,7 +8,7 @@
 # 4. Brings the server to the foreground
 # =============================================================
 
-MODEL="${OLLAMA_MODEL:-qwen2.5:3b-instruct-q4_K_M}"
+MODEL="${OLLAMA_MODEL:-qwen3.5:4b-instruct-q4_K_M}"
 
 echo "[Ollama] Starting server..."
 ollama serve &

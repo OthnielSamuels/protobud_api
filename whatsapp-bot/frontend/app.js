@@ -247,7 +247,7 @@ async function pollWaStatus() {
 function renderPage(page) {
   const container = document.getElementById('page-container');
   container.innerHTML = `<div class="page-loading"><div class="spinner"></div> Loading…</div>`;
-  const pages = { dashboard, clients, projects, estimates, invoices, pipeline, whatsapp, 'send-message': sendMessage };
+  const pages = { dashboard, clients, projects, estimates, invoices, pipeline, whatsapp, 'send-message': sendMessage, 'ai-monitor': aiMonitor };
   const fn = pages[page];
   if (fn) fn(container);
   else container.innerHTML = `<div class="page-loading" style="color:var(--red)">Could not make a connection</div>`;
@@ -1528,4 +1528,185 @@ window.doSendMessage = async function() {
     btn.disabled = false;
     btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M14 2L7 9M14 2L9 14l-2-5-5-2 12-5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Send via WhatsApp`;
   }
+};
+
+// =====================================================
+// AI MONITOR — GET /llm/events, GET /llm/status
+// =====================================================
+async function aiMonitor(container) {
+  container.innerHTML = `
+    <div class="page-header">
+      <div class="page-title-group">
+        <div class="page-eyebrow">System</div>
+        <div class="page-title">AI Monitor</div>
+      </div>
+      <div class="page-actions">
+        <span id="ai-model-label" class="text-muted text-mono text-sm"></span>
+        <button class="btn btn-ghost btn-sm" onclick="refreshAiMonitor()">&#x21BB; Refresh</button>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="monitor-grid" style="margin-bottom:20px">
+        <div class="monitor-card">
+          <div class="monitor-card-title">AI Status</div>
+          <div class="status-indicator">
+            <div class="status-big-dot" id="ai-big-dot"></div>
+            <div class="status-label" id="ai-status-label">Checking&hellip;</div>
+          </div>
+          <div style="margin-top:8px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted)" id="ai-queue-info"></div>
+        </div>
+        <div class="monitor-card">
+          <div class="monitor-card-title">Event Summary</div>
+          <div id="ai-event-summary" style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+            <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">No events yet</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="detail-section-title" style="margin-bottom:0">Event Log</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="ai-filter-errors" onchange="renderAiEvents()" />
+            Errors only
+          </label>
+          <button class="btn btn-ghost btn-sm" onclick="clearAiEventDisplay()">Clear display</button>
+        </div>
+      </div>
+      <div class="log-box" id="ai-event-log" style="min-height:300px;max-height:520px">
+        <div class="log-line" style="color:var(--text-muted)">Waiting for events&hellip;</div>
+      </div>
+    </div>`;
+
+  window._aiEvents = [];
+  await refreshAiMonitor();
+  const t = setInterval(refreshAiMonitor, 3000);
+  state.refreshTimers.push(t);
+}
+
+window._aiEvents = [];
+
+window.refreshAiMonitor = async function() {
+  // Update status
+  try {
+    const status = await Api.get('/llm/status');
+    const dot = document.getElementById('ai-big-dot');
+    const lbl = document.getElementById('ai-status-label');
+    const queueInfo = document.getElementById('ai-queue-info');
+    const navDot = document.getElementById('ai-status-dot');
+    const modelLabel = document.getElementById('ai-model-label');
+
+    const isActive = status.isProcessing;
+    if (dot)       dot.className = `status-big-dot ${isActive ? 'online' : ''}`;
+    if (lbl)     { lbl.textContent = isActive ? 'Thinking…' : 'Idle'; lbl.style.color = isActive ? 'var(--accent)' : 'var(--green)'; }
+    if (queueInfo) queueInfo.textContent = `Queue depth: ${status.queueDepth} · Model: ${status.model}`;
+    if (navDot)    navDot.className = `status-dot ${isActive ? 'online' : ''}`;
+    if (modelLabel) modelLabel.textContent = status.model;
+  } catch (_) {
+    const dot = document.getElementById('ai-big-dot');
+    const lbl = document.getElementById('ai-status-label');
+    if (dot) dot.className = 'status-big-dot offline';
+    if (lbl) { lbl.textContent = 'Unreachable'; lbl.style.color = 'var(--red)'; }
+  }
+
+  // Fetch events
+  try {
+    const events = await Api.get('/llm/events');
+    window._aiEvents = events || [];
+    renderAiEvents();
+    renderAiSummary(window._aiEvents);
+  } catch (_) {
+    const log = document.getElementById('ai-event-log');
+    if (log && log.children.length === 1 && log.firstChild.textContent.includes('Waiting')) {
+      log.innerHTML = `<div class="log-line err">[${new Date().toLocaleTimeString()}] Could not reach /llm/events — backend may be starting up</div>`;
+    }
+  }
+};
+
+window.renderAiEvents = function() {
+  const log = document.getElementById('ai-event-log');
+  if (!log) return;
+  const errorsOnly = document.getElementById('ai-filter-errors')?.checked;
+  const events = (window._aiEvents || []).filter(e =>
+    !errorsOnly || e.type === 'error' || e.type === 'retry'
+  );
+
+  if (!events.length) {
+    log.innerHTML = `<div class="log-line" style="color:var(--text-muted)">${errorsOnly ? 'No errors recorded.' : 'No events yet — waiting for AI activity…'}</div>`;
+    return;
+  }
+
+  const typeStyle = {
+    queued:    { color: 'var(--blue)',   icon: '•' },
+    thinking:  { color: 'var(--purple)', icon: '⧗' },
+    responded: { color: 'var(--green)',  icon: '✓' },
+    retry:     { color: '#f59e0b',       icon: '↺' },
+    error:     { color: 'var(--red)',    icon: '✕' },
+  };
+
+  log.innerHTML = events.map(e => {
+    const style = typeStyle[e.type] || { color: 'var(--text-muted)', icon: '·' };
+    const time = new Date(e.timestamp).toLocaleTimeString();
+    const convShort = e.conversationId ? e.conversationId.slice(0, 8) + '…' : '?';
+
+    let detail = '';
+    if (e.type === 'queued')    detail = `queue depth: ${e.queueDepth ?? 0}`;
+    if (e.type === 'thinking')  detail = `attempt ${e.attempt}/${e.maxRetries}`;
+    if (e.type === 'responded') {
+      detail = `type: ${e.responseType}`;
+      if (e.durationMs != null) detail += ` · ${e.durationMs}ms`;
+      if (e.responsePreview)    detail += ` · &ldquo;${escHtml(e.responsePreview)}&rdquo;`;
+    }
+    if (e.type === 'retry') {
+      detail = `attempt ${e.attempt}/${e.maxRetries} failed`;
+      if (e.durationMs != null) detail += ` (${e.durationMs}ms)`;
+      if (e.errorMessage)       detail += ` — ${escHtml(e.errorMessage)}`;
+    }
+    if (e.type === 'error') {
+      detail = e.errorMessage ? escHtml(e.errorMessage) : 'unknown error';
+      if (e.durationMs != null) detail += ` (${e.durationMs}ms)`;
+    }
+
+    return `<div class="log-line" style="border-left:2px solid ${style.color};padding-left:10px;margin-bottom:2px">
+      <span style="color:var(--text-muted);font-size:10px">${time}</span>
+      <span style="color:${style.color};font-weight:600;margin:0 6px">${style.icon} ${e.type.toUpperCase()}</span>
+      <span style="color:var(--text-muted);font-size:10px;font-family:var(--font-mono)">[${convShort}]</span>
+      <span style="color:var(--text-secondary);margin-left:8px;font-size:12px">${detail}</span>
+    </div>`;
+  }).join('');
+};
+
+window.renderAiSummary = function(events) {
+  const el = document.getElementById('ai-event-summary');
+  if (!el) return;
+  if (!events.length) {
+    el.innerHTML = `<div style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">No events yet</div>`;
+    return;
+  }
+  const counts = { queued: 0, thinking: 0, responded: 0, retry: 0, error: 0 };
+  for (const e of events) if (e.type in counts) counts[e.type]++;
+  const avgDuration = events
+    .filter(e => e.type === 'responded' && e.durationMs != null)
+    .reduce((acc, e, _, arr) => acc + e.durationMs / arr.length, 0);
+
+  el.innerHTML = [
+    `<div style="display:flex;gap:12px;flex-wrap:wrap">
+      <span style="font-family:var(--font-mono);font-size:12px"><span style="color:var(--blue)">•</span> ${counts.queued} queued</span>
+      <span style="font-family:var(--font-mono);font-size:12px"><span style="color:var(--purple)">⧗</span> ${counts.thinking} calls</span>
+      <span style="font-family:var(--font-mono);font-size:12px"><span style="color:var(--green)">✓</span> ${counts.responded} responses</span>
+      <span style="font-family:var(--font-mono);font-size:12px"><span style="color:#f59e0b">↺</span> ${counts.retry} retries</span>
+      <span style="font-family:var(--font-mono);font-size:12px"><span style="color:var(--red)">✕</span> ${counts.error} errors</span>
+    </div>`,
+    avgDuration > 0
+      ? `<div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">Avg response time: ${Math.round(avgDuration)}ms</div>`
+      : '',
+  ].join('');
+};
+
+window.clearAiEventDisplay = function() {
+  window._aiEvents = [];
+  const log = document.getElementById('ai-event-log');
+  if (log) log.innerHTML = `<div class="log-line" style="color:var(--text-muted)">Display cleared — new events will appear shortly.</div>`;
+  const summary = document.getElementById('ai-event-summary');
+  if (summary) summary.innerHTML = `<div style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">No events yet</div>`;
 };
