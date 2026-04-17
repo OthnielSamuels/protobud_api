@@ -58,7 +58,7 @@ docker compose logs -f ollama
 docker compose logs -f whatsapp-bot
 ```
 A QR code will appear in the terminal. Scan it with WhatsApp on your phone.
-The session is saved to a Docker volume — you only need to do this once.
+WhatsApp auth/cache are stored in named Docker volumes, but cleared on each bot startup, so you will re-scan after each fresh startup.
 
 ### 4. Verify everything is running
 ```bash
@@ -195,6 +195,8 @@ docker exec printbot-postgres pg_dump -U printbot printbot > backup_$(date +%Y%m
 docker run --rm -v printbot_whatsapp_auth:/data -v $(pwd):/backup \
   alpine tar czf /backup/whatsapp_auth_backup.tar.gz /data
 ```
+
+Note: volumes exist, but bot startup intentionally clears auth/cache each time.
 
 ---
 

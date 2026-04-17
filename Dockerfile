@@ -12,6 +12,7 @@ COPY package.json pnpm-lock.yaml .npmrc ./
 RUN pnpm install --frozen-lockfile
 
 COPY prisma ./prisma
+COPY prisma.config.ts ./
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 COPY src ./src
 
@@ -35,6 +36,7 @@ RUN pnpm install --prod --frozen-lockfile
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY prisma ./prisma
+COPY prisma.config.ts ./
 COPY backend-entrypoint.sh ./entrypoint.sh
 
 RUN chmod +x ./entrypoint.sh
