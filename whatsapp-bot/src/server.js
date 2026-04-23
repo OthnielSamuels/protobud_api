@@ -15,7 +15,7 @@ const QRCode = require('qrcode'); // ← added
  *   GET  /          → HTML dashboard
  *   POST /send      → { phone, message } → sends via WA client
  */
-function createBotServer(getClient, getConnectionStatus, getActivityLog, getLatestQR) { // ← added getLatestQR
+function createBotServer(getClient, getConnectionStatus, getActivityLog, getLatestQR, rateLimiter) { // ← added getLatestQR
   const PORT = parseInt(process.env.BOT_HTTP_PORT ?? '3001', 10);
   const startTime = new Date();
 
@@ -198,6 +198,7 @@ function createBotServer(getClient, getConnectionStatus, getActivityLog, getLate
         connected: getConnectionStatus(),
         uptime: (Date.now() - startTime.getTime()) / 1000,
         startTime: startTime.toISOString(),
+        ...(rateLimiter ? { rateLimiter: rateLimiter.getRateLimiterStats() } : {}),
       }));
       return;
     }
@@ -262,7 +263,22 @@ function createBotServer(getClient, getConnectionStatus, getActivityLog, getLate
             return;
           }
 
+          // Anti-ban: reject if global rate limit is exceeded
+          if (rateLimiter && rateLimiter.isRateLimited()) {
+            res.writeHead(429, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              error: 'Rate limit exceeded — slow down to protect account from ban',
+              stats: rateLimiter.getRateLimiterStats(),
+            }));
+            return;
+          }
+
+          // Anti-ban: random human-like delay before sending (1–3.5 s)
+          const sendDelay = 1_000 + Math.floor(Math.random() * 2_500);
+          await new Promise((r) => setTimeout(r, sendDelay));
+
           await waClient.sendMessage(phone, message);
+          if (rateLimiter) rateLimiter.recordSend(phone);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ sent: true }));

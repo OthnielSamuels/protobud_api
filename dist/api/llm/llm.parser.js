@@ -46,12 +46,12 @@ function validateInvoicePayload(payload) {
         return 'project.name is required';
     if (project.material !== null && project.material !== undefined) {
         if (!VALID_MATERIALS.includes(project.material)) {
-            return `invalid material: ${String(project.material)}`;
+            return `invalid material: ${JSON.stringify(project.material)}`;
         }
     }
     if (project.quality !== null && project.quality !== undefined) {
         if (!VALID_QUALITIES.includes(project.quality)) {
-            return `invalid quality: ${String(project.quality)}`;
+            return `invalid quality: ${JSON.stringify(project.quality)}`;
         }
     }
     if (!Array.isArray(p.items) || p.items.length === 0)
@@ -150,7 +150,7 @@ function parseLlmResponse(raw) {
                     payload,
                 };
             }
-            logger.warn(`Unexpected JSON type: ${String(parsed.type)}. Treating as text.`);
+            logger.warn(`Unexpected JSON type: ${JSON.stringify(parsed.type)}. Treating as text.`);
         }
         catch {
             logger.warn('JSON candidate found but parse failed. Treating as text.');

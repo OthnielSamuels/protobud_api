@@ -13,6 +13,11 @@ const CHAT_ENDPOINT  = `${BACKEND_URL}/chat/incoming`;
 const REQUEST_TIMEOUT_MS = parseInt(process.env.REQUEST_TIMEOUT_MS ?? '90000', 10);
 const CHROMIUM_EXECUTABLE = process.env.PUPPETEER_EXECUTABLE_PATH ?? '/usr/bin/chromium';
 
+// Anti-ban rate-limiting settings (tune via env vars)
+const MIN_REPLY_COOLDOWN_MS   = parseInt(process.env.MIN_REPLY_COOLDOWN_MS   ?? '8000',  10); // min ms between replies to the same number
+const MAX_MESSAGES_PER_MINUTE = parseInt(process.env.MAX_MESSAGES_PER_MINUTE ?? '12',    10); // global outbound cap per minute
+const MAX_MESSAGES_PER_DAY    = parseInt(process.env.MAX_MESSAGES_PER_DAY    ?? '200',   10); // global outbound cap per day
+
 // ---------------------------------------------------------------
 // Puppeteer args — tuned for low memory in Docker
 // ---------------------------------------------------------------
@@ -54,6 +59,14 @@ let latestQR = null; // ← stores raw QR string for /qr endpoint
 // In-flight request tracker — one pending request per phone number
 const inFlight = new Set();
 
+// Anti-ban: per-phone last-reply timestamp
+const lastRepliedAt = new Map(); // phone → Date.now() of last outbound send
+
+// Anti-ban: sliding-window send counters
+const sendTimestampsMinute = []; // timestamps of sends within the last 60 s
+let dailySendCount = 0;
+let dailyResetDate = new Date().toDateString();
+
 // ---------------------------------------------------------------
 // Activity Log — track last 100 events for dashboard
 // ---------------------------------------------------------------
@@ -79,6 +92,52 @@ function getActivityLog() {
 
 function getConnectionStatus() {
   return isConnected;
+}
+
+// ---------------------------------------------------------------
+// Rate limiter helpers (anti-ban)
+// ---------------------------------------------------------------
+
+function _purgeSendWindow() {
+  const cutoff = Date.now() - 60_000;
+  while (sendTimestampsMinute.length && sendTimestampsMinute[0] < cutoff) {
+    sendTimestampsMinute.shift();
+  }
+  // Reset daily counter when the calendar date changes
+  const today = new Date().toDateString();
+  if (today !== dailyResetDate) {
+    dailySendCount = 0;
+    dailyResetDate = today;
+  }
+}
+
+function isRateLimited() {
+  _purgeSendWindow();
+  return sendTimestampsMinute.length >= MAX_MESSAGES_PER_MINUTE
+      || dailySendCount >= MAX_MESSAGES_PER_DAY;
+}
+
+function recordSend(phone) {
+  _purgeSendWindow();
+  sendTimestampsMinute.push(Date.now());
+  dailySendCount++;
+  if (phone) lastRepliedAt.set(phone, Date.now());
+}
+
+function getCooldownRemaining(phone) {
+  const last = lastRepliedAt.get(phone);
+  if (!last) return 0;
+  return Math.max(0, MIN_REPLY_COOLDOWN_MS - (Date.now() - last));
+}
+
+function getRateLimiterStats() {
+  _purgeSendWindow();
+  return {
+    sendsLastMinute: sendTimestampsMinute.length,
+    maxPerMinute:    MAX_MESSAGES_PER_MINUTE,
+    dailySends:      dailySendCount,
+    maxPerDay:       MAX_MESSAGES_PER_DAY,
+  };
 }
 
 // ---------------------------------------------------------------
@@ -142,7 +201,7 @@ waClient.on('disconnected', (reason) => {
       logActivity('reconnect_failed', { error: err.message });
       process.exit(1);
     });
-  }, 5_000);
+  }, 5_000 + Math.floor(Math.random() * 10_000)); // 5–15 s jitter avoids instant reconnect pattern
 });
 
 // ---------------------------------------------------------------
@@ -163,24 +222,41 @@ waClient.on('message', async (msg) => {
     return;
   }
 
+  // Anti-ban: reject early if we've already hit the global send cap
+  if (isRateLimited()) {
+    console.warn(`[WhatsApp] Global rate limit hit — dropping message from ${phone}`);
+    logActivity('rate_limited', { phone, ...getRateLimiterStats() });
+    return;
+  }
+
   inFlight.add(phone);
   console.log(`[WhatsApp] Incoming from ${phone}: "${text.substring(0, 80)}"`);
   logActivity('incoming_message', { phone, text: text.substring(0, 100) });
 
   let chat = null;
   try {
+    // Anti-ban: enforce per-phone cooldown before we start typing
+    const cooldownMs = getCooldownRemaining(phone);
+    if (cooldownMs > 0) {
+      console.log(`[WhatsApp] Cooldown wait ${cooldownMs}ms for ${phone}`);
+      logActivity('cooldown_wait', { phone, cooldownMs });
+      await new Promise((r) => setTimeout(r, cooldownMs));
+    }
+
     // Show typing indicator while the backend processes the request
     chat = await msg.getChat();
     await chat.sendStateTyping();
 
     const reply = await forwardToBackend(phone, text);
 
-    // Random 1–4 s delay: simulates human typing speed, reduces WA ban risk
-    const typingDelay = 1000 + Math.floor(Math.random() * 3000);
+    // Anti-ban: length-based typing delay (~40 WPM ≈ 200 ms/word) + random jitter
+    const wordCount   = reply.split(/\s+/).length;
+    const typingDelay = Math.min(wordCount * 200, 6_000) + 800 + Math.floor(Math.random() * 2_000);
     await new Promise((res) => setTimeout(res, typingDelay));
 
     await chat.clearState();
     await msg.reply(reply);
+    recordSend(phone); // anti-ban: track outbound send
     console.log(`[WhatsApp] Replied to ${phone} (delay: ${typingDelay}ms)`);
     logActivity('reply_sent', { phone, replyLength: reply.length, typingDelay });
   } catch (err) {
@@ -248,6 +324,7 @@ createBotServer(
   () => isConnected,
   () => getActivityLog(),
   () => latestQR, // ← pass QR getter
+  { isRateLimited, recordSend, getRateLimiterStats }, // ← anti-ban rate limiter
 );
 
 // ---------------------------------------------------------------
